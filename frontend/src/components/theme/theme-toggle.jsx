@@ -26,7 +26,8 @@ export function ThemeToggle() {
           className="inline-flex h-9 items-center gap-2 rounded-full px-3 text-sm font-semibold text-muted-foreground aria-checked:bg-background aria-checked:text-foreground"
         >
           <Icon className="size-4" aria-hidden="true" />
-          {label}
+          {/* Icons only on small screens; the label stays available to screen readers. */}
+          <span className="sr-only sm:not-sr-only">{label}</span>
         </button>
       ))}
     </div>

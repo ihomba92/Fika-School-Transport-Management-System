@@ -18,4 +18,13 @@ export default defineConfig([
       parserOptions: { ecmaFeatures: { jsx: true } },
     },
   },
+    // shadcn/ui components are generated code: we don't edit them by hand.
+  // Relax only the two rules its generator trips, and only in that folder.
+  {
+    files: ['src/components/ui/**/*.{js,jsx}'],
+    rules: {
+      'react-refresh/only-export-components': 'off',
+      'no-unused-vars': ['error', { varsIgnorePattern: '^React$' }],
+    },
+  },
 ])
