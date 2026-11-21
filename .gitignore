@@ -1,0 +1,17 @@
+# Dependencies and builds
+node_modules/
+dist/
+
+# Secrets: never commit these
+.env
+.env.*
+!.env.example
+
+# Python (for the backend later)
+__pycache__/
+*.pyc
+.venv/
+
+# Editor and OS files
+.DS_Store
+.idea/
