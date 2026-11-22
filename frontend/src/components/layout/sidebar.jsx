@@ -4,7 +4,7 @@ import { Logo } from './logo'
 import { SCHOOL } from '@/data/school'
 import { cn } from '@/lib/utils'
 
-export function Sidebar({ navigation, onNavigate, className }) {
+export function Sidebar({ navigation, homePath, onNavigate, className }) {
   return (
     <nav
       aria-label="Main"
@@ -13,13 +13,9 @@ export function Sidebar({ navigation, onNavigate, className }) {
         className,
       )}
     >
-      <NavLink
-        to={navigation.sections[0].items[0].to}
-        onClick={onNavigate}
-        className="border-b border-sidebar-border px-2 pb-5"
-      >
-        <Logo subtitle={navigation.label} />
-      </NavLink>
+      <div className="border-b border-sidebar-border px-2 pb-5">
+        <Logo to={homePath} subtitle={navigation.label} onClick={onNavigate} />
+      </div>
 
       <div className="flex flex-1 flex-col gap-6">
         {navigation.sections.map((section) => (

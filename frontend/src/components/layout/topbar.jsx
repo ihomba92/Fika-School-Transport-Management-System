@@ -1,7 +1,8 @@
 import { Menu } from 'lucide-react'
+import { Logo } from './logo'
 import { ThemeToggle } from '@/components/theme/theme-toggle'
 
-export function Topbar({ roleLabel, onOpenMenu }) {
+export function Topbar({ roleLabel, homePath, onOpenMenu }) {
   return (
     <header className="flex items-center gap-3 border-b bg-card px-4 py-3 sm:px-8">
       <button
@@ -12,6 +13,8 @@ export function Topbar({ roleLabel, onOpenMenu }) {
       >
         <Menu className="size-5" aria-hidden="true" />
       </button>
+      {/* On phones the sidebar is hidden, so the logo sits in the top bar. */}
+      <Logo to={homePath} className="lg:hidden" />
 
       <div className="ml-auto flex items-center gap-3">
         <ThemeToggle />

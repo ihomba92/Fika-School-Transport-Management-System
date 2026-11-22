@@ -3,22 +3,29 @@ import { Outlet } from 'react-router'
 import { Sidebar } from './sidebar'
 import { Topbar } from './topbar'
 import { NAVIGATION } from '@/config/navigation'
+import { ROLE_HOME } from '@/config/roles'
 
 // The frame shared by every signed-in page: sidebar, top bar and the page itself.
 // On small screens the sidebar becomes a slide-in menu.
 export function AppLayout({ role }) {
   const navigation = NAVIGATION[role]
+  const homePath = ROLE_HOME[role]
   const [isMenuOpen, setIsMenuOpen] = useState(false)
   const closeMenu = () => setIsMenuOpen(false)
 
   return (
     <div className="flex min-h-screen">
-      <Sidebar navigation={navigation} className="hidden lg:flex" />
+      <Sidebar
+        navigation={navigation}
+        homePath={homePath}
+        className="hidden lg:flex"
+      />
 
       {isMenuOpen && (
         <div className="fixed inset-0 z-50 flex lg:hidden">
           <Sidebar
             navigation={navigation}
+            homePath={homePath}
             onNavigate={closeMenu}
             className="relative z-10"
           />
@@ -34,6 +41,7 @@ export function AppLayout({ role }) {
       <div className="flex min-w-0 flex-1 flex-col">
         <Topbar
           roleLabel={navigation.label}
+          homePath={homePath}
           onOpenMenu={() => setIsMenuOpen(true)}
         />
         <main className="mx-auto w-full max-w-[1360px] flex-1 px-4 py-7 sm:px-8">

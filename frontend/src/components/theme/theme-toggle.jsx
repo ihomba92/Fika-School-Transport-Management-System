@@ -7,6 +7,8 @@ const OPTIONS = [
   { value: 'system', label: 'Device', Icon: Monitor },
 ]
 
+// Icon-only buttons. Each still has a name: screen readers read aria-label,
+// and mouse users see it as a tooltip (title) when they hover.
 export function ThemeToggle() {
   const { theme, setTheme } = useTheme()
 
@@ -22,12 +24,12 @@ export function ThemeToggle() {
           type="button"
           role="radio"
           aria-checked={theme === value}
+          aria-label={label}
+          title={label}
           onClick={() => setTheme(value)}
-          className="inline-flex h-9 items-center gap-2 rounded-full px-3 text-sm font-semibold text-muted-foreground aria-checked:bg-background aria-checked:text-foreground"
+          className="grid size-9 place-items-center rounded-full text-muted-foreground aria-checked:bg-background aria-checked:text-foreground"
         >
           <Icon className="size-4" aria-hidden="true" />
-          {/* Icons only on small screens; the label stays available to screen readers. */}
-          <span className="sr-only sm:not-sr-only">{label}</span>
         </button>
       ))}
     </div>
