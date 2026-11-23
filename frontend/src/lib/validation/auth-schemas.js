@@ -26,7 +26,8 @@ const newPassword = z
     'Include at least one special character, such as ! @ # or ?',
   )
 
-const phone = z
+// Also used by the M-Pesa payment form.
+export const kenyanPhone = z
   .string()
   .trim()
   .min(1, 'Enter your phone number')
@@ -53,13 +54,17 @@ export const logInSchema = z.object({
 
 export const signUpSchema = z.object({
   fullName,
-  phone,
+  phone: kenyanPhone,
   email,
   password: newPassword,
   consent,
 })
 
-export const completeProfileSchema = z.object({ fullName, phone, consent })
+export const completeProfileSchema = z.object({
+  fullName,
+  phone: kenyanPhone,
+  consent,
+})
 
 export const emailOnlySchema = z.object({ email })
 

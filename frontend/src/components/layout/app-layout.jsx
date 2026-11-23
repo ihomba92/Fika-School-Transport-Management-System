@@ -42,6 +42,7 @@ export function AppLayout({ role }) {
         <Topbar
           roleLabel={navigation.label}
           homePath={homePath}
+          notificationsPath={navigation.notificationsPath}
           onOpenMenu={() => setIsMenuOpen(true)}
         />
         <main className="mx-auto w-full max-w-[1360px] flex-1 px-4 py-7 sm:px-8">

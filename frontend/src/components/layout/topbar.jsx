@@ -1,8 +1,17 @@
-import { Menu } from 'lucide-react'
+import { Bell, Menu } from 'lucide-react'
+import { NavLink } from 'react-router'
 import { Logo } from './logo'
+import { UserMenu } from './user-menu'
 import { ThemeToggle } from '@/components/theme/theme-toggle'
+import { SCHOOL } from '@/data/school'
+import { useClock } from '@/hooks/use-clock'
+import { formatLongDate, formatTime } from '@/lib/format'
 
-export function Topbar({ roleLabel, homePath, onOpenMenu }) {
+const CLOCK_TICK_MS = 15_000
+
+export function Topbar({ roleLabel, homePath, notificationsPath, onOpenMenu }) {
+  const now = useClock(CLOCK_TICK_MS)
+
   return (
     <header className="flex items-center gap-3 border-b bg-card px-4 py-3 sm:px-8">
       <button
@@ -16,12 +25,26 @@ export function Topbar({ roleLabel, homePath, onOpenMenu }) {
       {/* On phones the sidebar is hidden, so the logo sits in the top bar. */}
       <Logo to={homePath} className="lg:hidden" />
 
-      <div className="ml-auto flex items-center gap-3">
-        <ThemeToggle />
-        {/* Replaced with the signed-in user's name in Module 1. */}
-        <span className="hidden text-sm font-semibold text-muted-foreground sm:inline">
-          {roleLabel}
+      <div className="hidden flex-col leading-tight lg:flex">
+        <span className="text-sm font-bold">{SCHOOL.name}</span>
+        <span className="font-mono text-xs text-muted-foreground">
+          {formatLongDate(now)} · {formatTime(now)}
         </span>
+      </div>
+
+      <div className="ml-auto flex items-center gap-2 sm:gap-3">
+        <ThemeToggle />
+        {notificationsPath && (
+          <NavLink
+            to={notificationsPath}
+            aria-label="Notifications"
+            title="Notifications"
+            className="hidden size-11 place-items-center rounded-full border text-muted-foreground hover:text-foreground aria-[current=page]:border-foreground aria-[current=page]:text-foreground sm:grid"
+          >
+            <Bell className="size-5" aria-hidden="true" />
+          </NavLink>
+        )}
+        <UserMenu roleLabel={roleLabel} />
       </div>
     </header>
   )

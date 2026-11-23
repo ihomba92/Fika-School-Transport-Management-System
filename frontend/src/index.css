@@ -57,6 +57,8 @@
   --radius-2xl: calc(var(--radius) * 1.8);
   --radius-3xl: calc(var(--radius) * 2.2);
   --radius-4xl: calc(var(--radius) * 2.6);
+  --color-sidebar-danger: var(--sidebar-danger);
+  --color-sidebar-success: var(--sidebar-success);
 }
 
 /* Light mode */
@@ -104,6 +106,9 @@
   --sidebar-accent-foreground: #ffffff;
   --sidebar-border: #232326;
   --sidebar-ring: #ffc72c;
+    /* Red and green that read well on the dark sidebar surface */
+  --sidebar-danger: #ff6b6b;
+  --sidebar-success: #4ade80;
 }
 
 /* Dark mode */
@@ -148,6 +153,9 @@
   --sidebar-accent-foreground: #ffffff;
   --sidebar-border: #232326;
   --sidebar-ring: #ffc72c;
+    /* Red and green that read well on the dark sidebar surface */
+  --sidebar-danger: #ff6b6b;
+  --sidebar-success: #4ade80;
 }
 
 @layer base {

@@ -1,12 +1,13 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router'
-import { ROLE_HOME } from '@/config/roles'
 import { continueWithGoogle } from '@/services/auth-service'
+import { useFinishSignIn } from './use-finish-sign-in'
 
 // Shared by the log in and sign up pages: runs Google sign-in, then sends new
 // parents to finish their profile and everyone else to their home page.
 export function useGoogleSignIn() {
   const navigate = useNavigate()
+  const finishSignIn = useFinishSignIn()
   const [isBusy, setIsBusy] = useState(false)
   const [error, setError] = useState(null)
 
@@ -14,13 +15,13 @@ export function useGoogleSignIn() {
     setIsBusy(true)
     setError(null)
     try {
-      const user = await continueWithGoogle()
-      if (user.needsProfile) {
+      const result = await continueWithGoogle()
+      if (result.needsProfile) {
         navigate('/complete-profile', {
-          state: { email: user.email, name: user.name },
+          state: { email: result.email, name: result.name },
         })
       } else {
-        navigate(ROLE_HOME[user.role])
+        finishSignIn(result)
       }
     } catch (signInError) {
       setError(signInError.message)

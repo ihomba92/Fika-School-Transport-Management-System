@@ -1,6 +1,6 @@
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
-import { Link, useLocation, useNavigate } from 'react-router'
+import { Link, useLocation } from 'react-router'
 import { toast } from 'sonner'
 import { PageHeader } from '@/components/layout/page-header'
 import { ConsentField } from '@/components/auth/consent-field'
@@ -8,15 +8,15 @@ import { FormField } from '@/components/auth/form-field'
 import { PhoneInput } from '@/components/auth/phone-input'
 import { SubmitButton } from '@/components/auth/submit-button'
 import { TextInput } from '@/components/auth/text-input'
-import { ROLE_HOME } from '@/config/roles'
 import { completeProfileSchema } from '@/lib/validation/auth-schemas'
+import { useFinishSignIn } from '@/hooks/use-finish-sign-in'
 import { firstName } from '@/lib/format'
 import { completeProfile } from '@/services/auth-service'
 
 // Shown after a parent signs up with Google: Google doesn't give us a phone number,
 // and consent must be given in Fika itself.
 export function CompleteProfilePage() {
-  const navigate = useNavigate()
+  const finishSignIn = useFinishSignIn()
   const { state } = useLocation()
   const {
     register,
@@ -29,11 +29,11 @@ export function CompleteProfilePage() {
   })
 
   async function onSubmit(values) {
-    const user = await completeProfile(values)
-    toast.success(`Welcome to Fika, ${firstName(user.name)}`, {
+    const login = await completeProfile({ ...values, email: state?.email })
+    toast.success(`Welcome to Fika, ${firstName(login.user.name)}`, {
       description: 'Your profile is complete.',
     })
-    navigate(ROLE_HOME[user.role])
+    finishSignIn(login)
   }
 
   return (

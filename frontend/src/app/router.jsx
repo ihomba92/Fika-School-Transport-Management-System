@@ -1,4 +1,5 @@
 import { createBrowserRouter } from 'react-router'
+import { RequireRole } from '@/auth/require-role'
 import { AppLayout } from '@/components/layout/app-layout'
 import { AuthLayout } from '@/components/layout/auth-layout'
 import { NotFoundPage } from '@/pages/public/not-found-page'
@@ -10,7 +11,7 @@ function lazyPage(load, name) {
 }
 
 // Every web address in the app. Pages for each role sit inside that role's layout.
-// Access control (who may open which section) is added with the back end in Module 1.
+// RequireRole keeps each role's pages for that role; the back end checks too.
 export const router = createBrowserRouter([
   {
     path: '/',
@@ -80,7 +81,11 @@ export const router = createBrowserRouter([
   },
   {
     path: 'admin',
-    element: <AppLayout role="admin" />,
+    element: (
+      <RequireRole role="admin">
+        <AppLayout role="admin" />
+      </RequireRole>
+    ),
     children: [
       {
         index: true,
@@ -128,7 +133,11 @@ export const router = createBrowserRouter([
   },
   {
     path: 'parent',
-    element: <AppLayout role="parent" />,
+    element: (
+      <RequireRole role="parent">
+        <AppLayout role="parent" />
+      </RequireRole>
+    ),
     children: [
       {
         index: true,
@@ -152,17 +161,42 @@ export const router = createBrowserRouter([
         ),
       },
       {
+        path: 'children/new',
+        lazy: lazyPage(
+          () => import('@/pages/parent/child-form-page'),
+          'ParentChildFormPage',
+        ),
+      },
+      {
+        path: 'children/:childId/edit',
+        lazy: lazyPage(
+          () => import('@/pages/parent/child-form-page'),
+          'ParentChildFormPage',
+        ),
+      },
+      {
         path: 'payments',
         lazy: lazyPage(
           () => import('@/pages/parent/payments-page'),
           'ParentPaymentsPage',
         ),
       },
+      {
+        path: 'notifications',
+        lazy: lazyPage(
+          () => import('@/pages/parent/notifications-page'),
+          'ParentNotificationsPage',
+        ),
+      },
     ],
   },
   {
     path: 'driver',
-    element: <AppLayout role="driver" />,
+    element: (
+      <RequireRole role="driver">
+        <AppLayout role="driver" />
+      </RequireRole>
+    ),
     children: [
       {
         index: true,
