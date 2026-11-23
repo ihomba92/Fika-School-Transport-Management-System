@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { GRADES, PLANS, PLAN_IDS } from '@/config/plans'
+import { requiredPhoto } from './photo'
 
 const LANDMARK_MAX_LENGTH = 200
 
@@ -41,6 +42,8 @@ export const childSchema = z
       .trim()
       .min(2, "Enter your child's full name")
       .max(100, 'Keep the name under 100 characters'),
+    // A recent photo, so the driver can recognise the child (FR-2.1, FR-4.2).
+    photo: requiredPhoto,
     grade: z.enum(GRADES, { error: 'Choose a grade' }),
     plan: z.enum(PLAN_IDS, { error: 'Choose a transport plan' }),
     pickup: placeDraft,

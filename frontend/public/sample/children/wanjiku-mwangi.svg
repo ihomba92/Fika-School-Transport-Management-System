@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 240" role="img" aria-label="Illustrated sample photo of a student">
+  <rect width="240" height="240" fill="#f3e6c4"/>
+  <circle cx="200" cy="36" r="64" fill="#ffd76a"/>
+  <path d="M40 240c6-44 38-66 80-66s74 22 80 66z" fill="#7a1f2b"/>
+  <path d="M100 176l20 24 20-24" fill="#f4f1ea"/>
+  <path d="M106 150h28v26c0 9-28 9-28 0z" fill="#6e4528"/>
+  <ellipse cx="120" cy="112" rx="40" ry="44" fill="#8a5a36"/>
+  <circle cx="80" cy="66" r="22" fill="#1d1410"/><circle cx="160" cy="66" r="22" fill="#1d1410"/><path d="M80 100c0-30 18-48 40-48s40 18 40 48c-6-14-18-22-40-22s-34 8-40 22z" fill="#1d1410"/>
+  <ellipse cx="80" cy="116" rx="6" ry="9" fill="#6e4528"/>
+  <ellipse cx="160" cy="116" rx="6" ry="9" fill="#6e4528"/>
+  <ellipse cx="105" cy="114" rx="4.5" ry="5" fill="#1d1410"/>
+  <ellipse cx="135" cy="114" rx="4.5" ry="5" fill="#1d1410"/>
+  <path d="M118 120q-4 10 3 12" stroke="#6e4528" stroke-width="3" fill="none" stroke-linecap="round"/>
+  <path d="M106 138q14 12 28 0" stroke="#3b2112" stroke-width="4" fill="none" stroke-linecap="round"/>
+</svg>

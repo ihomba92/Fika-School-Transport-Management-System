@@ -212,6 +212,13 @@ export const router = createBrowserRouter([
           'DriverTripPage',
         ),
       },
+      {
+        path: 'profile',
+        lazy: lazyPage(
+          () => import('@/pages/driver/profile-page'),
+          'DriverProfilePage',
+        ),
+      },
     ],
   },
   { path: '*', element: <NotFoundPage /> },
