@@ -5,6 +5,7 @@ import { Link } from 'react-router'
 import { FormField } from '@/components/auth/form-field'
 import { TextInput } from '@/components/auth/text-input'
 import { Card } from '@/components/common/card'
+import { PhotoInput } from '@/components/common/photo-input'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Label } from '@/components/ui/label'
@@ -44,6 +45,28 @@ export function ChildForm({ defaultValues, termFee, submitLabel, onSave }) {
         <legend className="mb-4 font-heading text-xl font-bold">
           1 · About your child
         </legend>
+        <FormField
+          id="photo"
+          label="Photo"
+          hint="A recent, clear photo of your child's face. The driver uses it to recognise your child at the stop."
+          error={errors.photo?.message}
+        >
+          {(field) => (
+            <Controller
+              name="photo"
+              control={control}
+              render={({ field: photo }) => (
+                <PhotoInput
+                  id={field.id}
+                  value={photo.value}
+                  onChange={photo.onChange}
+                  describedBy={field['aria-describedby']}
+                  isInvalid={field['aria-invalid']}
+                />
+              )}
+            />
+          )}
+        </FormField>
         <div className="grid gap-4 sm:grid-cols-[2fr_1fr]">
           <FormField
             id="fullName"

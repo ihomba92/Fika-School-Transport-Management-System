@@ -1,8 +1,10 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 
 // Asks the server for fresh data every `intervalMs` (NFR-8: live bus positions
 // by polling every 10–15 s). It pauses while the tab is hidden, which saves the
 // phone's battery and data, and asks again as soon as the tab is back.
+// `refresh()` asks straight away, for example right after the user changes
+// something, instead of waiting up to 10 seconds.
 export function usePolling(load, intervalMs) {
   // `isLoaded` tells "no data yet" apart from an answer of null.
   const [state, setState] = useState({
@@ -10,6 +12,8 @@ export function usePolling(load, intervalMs) {
     error: null,
     isLoaded: false,
   })
+
+  const [version, setVersion] = useState(0)
 
   useEffect(() => {
     let isCurrent = true
@@ -30,7 +34,9 @@ export function usePolling(load, intervalMs) {
       clearInterval(timer)
       document.removeEventListener('visibilitychange', poll)
     }
-  }, [load, intervalMs])
+  }, [load, intervalMs, version])
 
-  return state
+  const refresh = useCallback(() => setVersion((n) => n + 1), [])
+
+  return { ...state, refresh }
 }

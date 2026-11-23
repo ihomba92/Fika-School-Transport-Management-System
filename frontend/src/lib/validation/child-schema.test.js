@@ -9,6 +9,7 @@ const home = {
 }
 const valid = {
   fullName: 'Baraka Mwangi',
+  photo: '/sample/children/baraka-mwangi.svg',
   grade: 'Grade 1',
   plan: 'both',
   pickup: home,
@@ -70,6 +71,15 @@ describe('childSchema', () => {
     const values = { ...valid, fullName: '', pickup: EMPTY_PLACE }
     expect(issuePaths(values)).toEqual([
       'fullName',
+      'pickup.address',
+      'pickup.position',
+    ])
+  })
+
+  it('needs a photo of the child, and still checks the rest', () => {
+    const values = { ...valid, photo: null, pickup: EMPTY_PLACE }
+    expect(issuePaths(values)).toEqual([
+      'photo',
       'pickup.address',
       'pickup.position',
     ])

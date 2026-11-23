@@ -1,6 +1,6 @@
 import { Pencil } from 'lucide-react'
 import { Link } from 'react-router'
-import { Avatar } from '@/components/common/avatar'
+import { PersonPhoto } from '@/components/common/person-photo'
 import { Card } from '@/components/common/card'
 import { StatusBadge } from '@/components/common/status-badge'
 import { PLANS } from '@/config/plans'
@@ -19,7 +19,11 @@ export function ChildCard({ child, showDriver = true }) {
   return (
     <Card className="flex flex-col gap-5 p-6">
       <div className="flex items-center gap-4">
-        <Avatar name={child.name} className="size-13 text-lg" />
+        <PersonPhoto
+          name={child.name}
+          src={child.photoUrl}
+          className="size-16 rounded-2xl text-lg"
+        />
         <div className="flex min-w-0 flex-1 flex-col gap-1">
           <h3 className="font-heading text-xl font-bold tracking-tight">
             {child.name}

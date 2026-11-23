@@ -15,6 +15,7 @@ import { getChild, getCurrentTerm, saveChild } from '@/services/parent-service'
 
 const NEW_CHILD = {
   fullName: '',
+  photo: null,
   grade: '',
   plan: 'both',
   pickup: EMPTY_PLACE,
@@ -98,6 +99,7 @@ function toFormValues(child) {
     !child.dropoff || child.dropoff.address === child.pickup?.address
   return {
     fullName: child.name,
+    photo: child.photoUrl,
     grade: child.grade,
     plan: child.plan,
     pickup: toPlace(child.pickup),

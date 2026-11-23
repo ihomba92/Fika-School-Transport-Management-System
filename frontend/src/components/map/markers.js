@@ -8,6 +8,8 @@ const ICON_PATHS = {
   school:
     '<path d="M21.42 10.922a1 1 0 0 0-.019-1.838L12.83 5.18a2 2 0 0 0-1.66 0L2.6 9.08a1 1 0 0 0 0 1.832l8.57 3.908a2 2 0 0 0 1.66 0z"/><path d="M22 10v6"/><path d="M6 12.5V16a6 3 0 0 0 12 0v-3.5"/>',
   user: '<path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>',
+  check: '<path d="M20 6 9 17l-5-5"/>',
+  navigation: '<polygon points="3 11 22 2 13 21 11 13 3 11"/>',
   pin: '<path d="M20 10c0 4.993-5.539 10.193-7.399 11.799a1 1 0 0 1-1.202 0C9.539 20.193 4 14.993 4 10a8 8 0 0 1 16 0"/><circle cx="12" cy="10" r="3"/>',
 }
 
@@ -98,5 +100,29 @@ export function stopMarker(isPassed) {
     `<div class="size-3.5 rounded-full border-2 border-sidebar ${fill}"></div>`,
     [14, 14],
     [7, 7],
+  )
+}
+
+// The driver's own bus: a dark circle with an arrow, ringed in yellow.
+export function driverMarker() {
+  return marker(
+    `<div class="grid size-12 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full bg-sidebar text-primary ring-8 ring-primary/35">${svg('navigation', 20)}</div>`,
+    [0, 0],
+    [0, 0],
+  )
+}
+
+// A numbered stop on the driver's map. `state` is 'done', 'next' or 'later'.
+export function numberedStopMarker(number, state) {
+  const styles = {
+    done: 'bg-sidebar text-primary border-sidebar',
+    next: 'bg-primary text-primary-foreground border-sidebar size-8',
+    later: 'bg-card text-foreground border-sidebar',
+  }
+  const content = state === 'done' ? svg('check', 13) : number
+  return marker(
+    `<div class="grid size-7 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full border-2 font-mono text-[11px] font-bold ${styles[state]}">${content}</div>`,
+    [0, 0],
+    [0, 0],
   )
 }

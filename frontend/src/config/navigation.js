@@ -1,5 +1,6 @@
 import {
   Bell,
+  UserRound,
   Bus,
   LayoutGrid,
   Map as MapIcon,
@@ -71,6 +72,10 @@ export const NAVIGATION = {
           { to: '/driver', label: 'Today', icon: Bus, end: true },
           { to: '/driver/trip', label: 'Active trip', icon: Navigation },
         ],
+      },
+      {
+        title: 'Account',
+        items: [{ to: '/driver/profile', label: 'Profile', icon: UserRound }],
       },
     ],
   },

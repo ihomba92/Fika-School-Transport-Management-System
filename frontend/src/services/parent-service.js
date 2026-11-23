@@ -96,7 +96,9 @@ export async function getMorningTrip() {
   const child = store.children.find((c) => c.morningBusId && c.pickup?.stopId)
   if (!child) return null
 
-  const trip = TRIPS.find((t) => t.busId === child.morningBusId)
+  const trip = TRIPS.find(
+    (t) => t.kind === 'morning' && t.busId === child.morningBusId,
+  )
   const stops = withArrivalTimes(trip)
   const now = sampleNow()
   const riders = store.children
@@ -136,6 +138,12 @@ export async function saveChild(values, childId) {
   const plan = PLANS[values.plan]
   const details = {
     name: values.fullName,
+    // The real API receives the file in a multipart upload and answers with
+    // the saved photo's address. The mock makes a temporary browser address.
+    photoUrl:
+      values.photo instanceof File
+        ? URL.createObjectURL(values.photo)
+        : values.photo,
     grade: values.grade,
     plan: values.plan,
     pickup: plan.hasMorning ? values.pickup : null,

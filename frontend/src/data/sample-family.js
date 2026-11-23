@@ -17,6 +17,9 @@ export const SAMPLE_FAMILY = {
     {
       id: 'wanjiku',
       name: 'Wanjiku Mwangi',
+      // Added by Jane when she added each child (FR-2.1). Sample photos are
+      // illustrations; real ones are uploaded files.
+      photoUrl: '/sample/children/wanjiku-mwangi.svg',
       grade: 'Grade 4',
       plan: 'both',
       morningBusId: 'bus-03',
@@ -27,6 +30,7 @@ export const SAMPLE_FAMILY = {
     {
       id: 'baraka',
       name: 'Baraka Mwangi',
+      photoUrl: '/sample/children/baraka-mwangi.svg',
       grade: 'Grade 1',
       plan: 'morning',
       morningBusId: 'bus-03',
