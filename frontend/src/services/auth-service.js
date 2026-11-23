@@ -3,17 +3,22 @@ import {
   SAMPLE_GOOGLE_USER,
   SAMPLE_PASSWORD,
 } from '@/data/sample-accounts'
+import { simulateNetwork } from './mock-network'
 
 // Stand-in for the Flask API until Module 1's back end exists.
 // Each function has the shape the real API call will have, so pages won't change
 // when these bodies are swapped for real requests.
 
-const SIMULATED_DELAY_MS = 600
-
 export class AuthError extends Error {}
 
-function simulateNetwork() {
-  return new Promise((resolve) => setTimeout(resolve, SIMULATED_DELAY_MS))
+// The real API (Flask-JWT-Extended) answers a successful log in with signed
+// JWTs. The mock hands out placeholder strings in the same places.
+function loginResponse(user) {
+  return {
+    user,
+    accessToken: `mock-access-token.${user.email}`,
+    refreshToken: `mock-refresh-token.${user.email}`,
+  }
 }
 
 export async function logIn({ email, password }) {
@@ -30,7 +35,11 @@ export async function logIn({ email, password }) {
       'Confirm your email first. We sent you a link when you signed up.',
     )
   }
-  return { name: account.name, role: account.role }
+  return loginResponse({
+    name: account.name,
+    email: account.email,
+    role: account.role,
+  })
 }
 
 export async function signUp({ email }) {
@@ -48,9 +57,9 @@ export async function continueWithGoogle() {
   return { ...SAMPLE_GOOGLE_USER, needsProfile: true }
 }
 
-export async function completeProfile({ fullName }) {
+export async function completeProfile({ email, fullName }) {
   await simulateNetwork()
-  return { name: fullName, role: 'parent' }
+  return loginResponse({ name: fullName, email, role: 'parent' })
 }
 
 export async function resendVerificationEmail() {

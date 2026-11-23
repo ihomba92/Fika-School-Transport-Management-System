@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 240" role="img" aria-label="Illustrated sample photo of a driver">
+  <rect width="240" height="240" fill="#e9e4da"/>
+  <circle cx="190" cy="40" r="70" fill="#d9d2c4"/>
+  <!-- shoulders and uniform -->
+  <path d="M28 240c6-48 42-74 92-74s86 26 92 74z" fill="#1f3b5c"/>
+  <path d="M96 168l24 34 24-34" fill="#f4f1ea"/>
+  <path d="M112 186h16l-3 54h-10z" fill="#ffc72c"/>
+  <!-- neck -->
+  <path d="M102 140h36v30c0 10-36 10-36 0z" fill="#6b4226"/>
+  <!-- head -->
+  <ellipse cx="120" cy="104" rx="44" ry="50" fill="#7a4b2c"/>
+  <path d="M76 96c0-34 20-54 44-54s44 20 44 54c-6-16-20-24-44-24s-38 8-44 24z" fill="#1d1410"/>
+  <ellipse cx="76" cy="108" rx="7" ry="11" fill="#6b4226"/>
+  <ellipse cx="164" cy="108" rx="7" ry="11" fill="#6b4226"/>
+  <!-- face -->
+  <ellipse cx="104" cy="106" rx="4.5" ry="5" fill="#1d1410"/>
+  <ellipse cx="136" cy="106" rx="4.5" ry="5" fill="#1d1410"/>
+  <path d="M94 94q10-6 20 0M126 94q10-6 20 0" stroke="#1d1410" stroke-width="4" fill="none" stroke-linecap="round"/>
+  <path d="M120 112q-6 14 2 16" stroke="#5a361f" stroke-width="3" fill="none" stroke-linecap="round"/>
+  <path d="M106 134q14 10 28 0" stroke="#3b2112" stroke-width="4" fill="none" stroke-linecap="round"/>
+</svg>

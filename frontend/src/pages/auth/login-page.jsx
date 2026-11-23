@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
-import { Link, useNavigate } from 'react-router'
+import { Link } from 'react-router'
 import { toast } from 'sonner'
 import { PageHeader } from '@/components/layout/page-header'
 import { AuthDivider } from '@/components/auth/auth-divider'
@@ -11,14 +11,14 @@ import { GoogleButton } from '@/components/auth/google-button'
 import { PasswordInput } from '@/components/auth/password-input'
 import { SubmitButton } from '@/components/auth/submit-button'
 import { TextInput } from '@/components/auth/text-input'
-import { ROLE_HOME } from '@/config/roles'
 import { logInSchema } from '@/lib/validation/auth-schemas'
+import { useFinishSignIn } from '@/hooks/use-finish-sign-in'
 import { useGoogleSignIn } from '@/hooks/use-google-sign-in'
 import { firstName } from '@/lib/format'
 import { logIn } from '@/services/auth-service'
 
 export function LoginPage() {
-  const navigate = useNavigate()
+  const finishSignIn = useFinishSignIn()
   const google = useGoogleSignIn()
   const [formError, setFormError] = useState(null)
   const {
@@ -30,9 +30,9 @@ export function LoginPage() {
   async function onSubmit(values) {
     setFormError(null)
     try {
-      const user = await logIn(values)
-      toast.success(`Welcome back, ${firstName(user.name)}`)
-      navigate(ROLE_HOME[user.role])
+      const login = await logIn(values)
+      toast.success(`Welcome back, ${firstName(login.user.name)}`)
+      finishSignIn(login)
     } catch (error) {
       setFormError(error.message)
     }

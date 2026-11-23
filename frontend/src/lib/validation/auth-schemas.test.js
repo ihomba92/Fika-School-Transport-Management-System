@@ -6,7 +6,7 @@ const validSignUp = {
   fullName: 'Jane Mwangi',
   phone: '0722 118 340',
   email: '  Jane.Mwangi@Example.com ',
-  password: 'fika2026!',
+  password: 'Fika2026!',
   consent: true,
 }
 
@@ -29,9 +29,10 @@ describe('signUpSchema', () => {
   })
 
   it.each([
-    ['short1', 'Use at least 8 characters'],
-    ['onlyletters', 'Include at least one number'],
-    ['12345678', 'Include at least one letter'],
+    ['Sh0rt!', 'Use at least 8 characters'],
+    ['only-letters', 'Include at least one number'],
+    ['1234-5678', 'Include at least one letter'],
+    ['Fika2026', 'Include at least one special character, such as ! @ # or ?'],
   ])('rejects the password %s', (password, message) => {
     expect(
       errorsFor(signUpSchema, { ...validSignUp, password }).password,
@@ -48,7 +49,7 @@ describe('signUpSchema', () => {
 describe('resetPasswordSchema', () => {
   it('requires both passwords to match', () => {
     const errors = errorsFor(resetPasswordSchema, {
-      password: 'fika2026',
+      password: 'Fika2026!',
       confirmPassword: 'fika2027',
     })
     expect(errors.confirmPassword).toContain('The passwords do not match')

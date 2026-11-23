@@ -1,4 +1,5 @@
 import {
+  Bell,
   Bus,
   LayoutGrid,
   Map as MapIcon,
@@ -10,6 +11,7 @@ import {
 
 // One menu per role. Each item points to a route defined in app/router.jsx.
 // `end: true` marks a home page, so it is only highlighted on its exact URL.
+// `notificationsPath` adds the bell to the top bar.
 export const NAVIGATION = {
   admin: {
     label: 'Transport admin',
@@ -34,6 +36,7 @@ export const NAVIGATION = {
   },
   parent: {
     label: 'Parent',
+    notificationsPath: '/parent/notifications',
     sections: [
       {
         title: 'My family',
@@ -46,6 +49,16 @@ export const NAVIGATION = {
       {
         title: 'Fees',
         items: [{ to: '/parent/payments', label: 'Payments', icon: Wallet }],
+      },
+      {
+        title: 'Account',
+        items: [
+          {
+            to: '/parent/notifications',
+            label: 'Notifications',
+            icon: Bell,
+          },
+        ],
       },
     ],
   },

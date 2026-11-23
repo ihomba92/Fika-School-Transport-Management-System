@@ -1,6 +1,6 @@
 // Sample accounts for trying the log in screen before the back end exists.
 // Development only: Module 1's back end replaces this file with real accounts.
-export const SAMPLE_PASSWORD = 'fika2026!'
+export const SAMPLE_PASSWORD = 'Fika2026!'
 
 export const SAMPLE_ACCOUNTS = [
   {
