@@ -1,6 +1,6 @@
 import { useCallback } from 'react'
 import { zodResolver } from '@hookform/resolvers/zod'
-import { ArrowDown, ArrowUp, Plus, Trash2 } from 'lucide-react'
+import { ArrowDown, ArrowUp, Plus, RefreshCw, Trash2 } from 'lucide-react'
 import { Controller, useFieldArray, useForm, useWatch } from 'react-hook-form'
 import { Link, useNavigate, useParams } from 'react-router'
 import { toast } from 'sonner'
@@ -16,18 +16,18 @@ import { streetName } from '@/components/driver/trip-names'
 import { DriverRouteMap } from '@/components/map/driver-route-map'
 import { PageHeader } from '@/components/layout/page-header'
 import { useServiceData } from '@/hooks/use-service-data'
+import {
+  minutesPerKm,
+  nearestNeighbourOrder,
+  retime,
+  routeKm,
+} from '@/lib/stop-order'
 import { routeSchema } from '@/lib/validation/route-schema'
-import { getRoute, saveRoute } from '@/services/fleet-service'
-
-const NEW_ROUTE = {
-  name: '',
-  stops: [{ name: '', landmark: '', time: '06:15', position: null }],
-  schoolTime: '07:30',
-}
+import { getNewRoute, getRoute, saveRoute } from '@/services/fleet-service'
 
 // The form's values from a saved route. The school, always last, has its
 // own field; `studentCount` stays on each stop so one in use can't be
-// removed (the service checks again).
+// removed (the service checks again). `school` is kept for the map.
 function toFormValues(route) {
   const school = route.stops.at(-1)
   return {
@@ -41,6 +41,7 @@ function toFormValues(route) {
       studentCount: stop.studentCount,
     })),
     schoolTime: school.time,
+    school: route.school,
   }
 }
 
@@ -50,10 +51,7 @@ function toFormValues(route) {
 export function AdminRouteFormPage() {
   const { routeId } = useParams()
   const load = useCallback(
-    () =>
-      routeId
-        ? getRoute(routeId).then(toFormValues)
-        : Promise.resolve(NEW_ROUTE),
+    () => (routeId ? getRoute(routeId) : getNewRoute()).then(toFormValues),
     [routeId],
   )
   const route = useServiceData(load)
@@ -72,10 +70,11 @@ function RouteForm({ routeId, initial }) {
     control,
     handleSubmit,
     setError,
+    setValue,
     getValues,
     formState: { errors, isSubmitting },
   } = useForm({ resolver: zodResolver(routeSchema), defaultValues: initial })
-  const { fields, append, remove, move } = useFieldArray({
+  const { fields, append, remove, move, replace } = useFieldArray({
     control,
     name: 'stops',
     keyName: 'key',
@@ -97,9 +96,8 @@ function RouteForm({ routeId, initial }) {
         isDone: false,
       })),
     {
+      ...initial.school,
       id: 'school',
-      name: 'School',
-      position: [-1.2805, 36.769],
       time: schoolTime,
       hasRiders: false,
       isDone: false,
@@ -113,6 +111,37 @@ function RouteForm({ routeId, initial }) {
       landmark: '',
       time: last ? addMinutes(last.time, 5) : '06:15',
       position: null,
+    })
+  }
+
+  // A shorter order by distance, with new times at the route's current
+  // pace (lib/stop-order.js). The admin checks it before saving.
+  function recalculateOrder() {
+    const current = getValues('stops')
+    if (current.some((stop) => !stop.position)) {
+      toast.error('Place every stop on the map first.')
+      return
+    }
+    const ordered = nearestNeighbourOrder(current)
+    if (ordered.every((stop, index) => stop === current[index])) {
+      toast('Already the shortest order', {
+        description: 'Nothing changed.',
+      })
+      return
+    }
+    const school = initial.school
+    const pace = minutesPerKm(current, school, getValues('schoolTime'))
+    const { stops: reordered, schoolTime: arrival } = retime(
+      ordered,
+      school,
+      pace,
+    )
+    replace(reordered)
+    setValue('schoolTime', arrival)
+    const before = routeKm(current, school)
+    const after = routeKm(reordered, school)
+    toast.success('Stops reordered', {
+      description: `About ${before.toFixed(1)} km before, ${after.toFixed(1)} km now. Check the order and times, then save.`,
     })
   }
 
@@ -163,10 +192,23 @@ function RouteForm({ routeId, initial }) {
 
         <Card className="flex flex-col gap-4 p-6 sm:p-8">
           <div className="flex flex-col gap-1">
-            <h2 className="font-heading text-lg font-bold">Stops</h2>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <h2 className="font-heading text-lg font-bold">Stops</h2>
+              <button
+                type="button"
+                onClick={recalculateOrder}
+                disabled={fields.length < 3}
+                className="flex h-10 items-center gap-2 rounded-full border px-4 text-sm font-semibold hover:bg-muted disabled:opacity-50"
+              >
+                <RefreshCw className="size-4" aria-hidden="true" />
+                Recalculate stop order
+              </button>
+            </div>
             <p className="text-sm text-muted-foreground">
               In driving order for the morning. A stop where students are picked
-              up can't be removed.
+              up can't be removed. Recalculate stop order suggests a shorter
+              order by distance, keeping the start first and the route's current
+              pace.
             </p>
             {errors.stops?.root && (
               <p className="text-sm font-medium text-danger">

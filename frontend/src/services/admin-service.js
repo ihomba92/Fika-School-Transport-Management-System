@@ -1,6 +1,7 @@
 import { PLANS } from '@/config/plans'
 import { sampleNow } from '@/data/sample-clock'
 import { SCHOOL } from '@/data/school'
+import { toDateKey } from '@/lib/dates'
 import { formatTime } from '@/lib/format'
 import { checkShift, schoolWeek, shiftRows } from '@/lib/shifts'
 import { filterStudents } from '@/lib/student-filters'
@@ -102,7 +103,7 @@ export async function getAdminOverview() {
 
   return {
     now,
-    term: currentTerm,
+    term: currentTerm(),
     buses: live,
     stats: {
       busCount: store.buses.length,
@@ -207,7 +208,12 @@ export async function assignStudent(studentId, choice) {
     student[`${run}RouteId`] = runs[run]?.routeId || null
     student[`${run}BusId`] = runs[run]?.busId || null
   }
+  const wasWaiting = student.isWaiting
   student.isWaiting = !student.morningBusId && !student.eveningBusId
+  // Fees start when a waiting student first gets a bus.
+  if (wasWaiting && !student.isWaiting) {
+    student.joinedOn = toDateKey(sampleNow())
+  }
   return withDetails(student)
 }
 
