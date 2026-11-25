@@ -2,9 +2,16 @@ import { PLANS } from '@/config/plans'
 import { CURRENT_TERM_ID, TERMS } from '@/data/fee-settings'
 import { sampleNow } from '@/data/sample-clock'
 import { SAMPLE_FAMILY } from '@/data/sample-family'
-import { BUSES, SCHOOL_LOCATION, TRIPS } from '@/data/sample-transport'
+import {
+  BUSES,
+  DRIVERS,
+  ROUTES,
+  SCHOOL_LOCATION,
+  SHIFTS,
+} from '@/data/sample-transport'
 import { toDateKey } from '@/lib/dates'
 import { feeStatus, planFee, splitIntoInstalments } from '@/lib/fees'
+import { RUNS, busShift, runStops } from '@/lib/shifts'
 import { tripProgress, withArrivalTimes } from '@/lib/trip'
 import { simulateNetwork } from './mock-network'
 
@@ -29,19 +36,34 @@ function childFee(child) {
   return { fee, paid, ...feeStatus({ fee, paid, instalments, today }) }
 }
 
-// The trip this child is on while their bus is on the route, with today's
-// bus and driver; null at any other time. Parents see the driver only then
-// (FR-2.6). The real API will send today's actual assignment, so a stand-in
-// driver shows up automatically.
+// A child has a route and a bus for each run. Who drives the bus, and the
+// route it runs, are set per shift in the admin's schedule (FR-3.11), so a
+// change shows up here the next time the page loads; parents aren't sent a
+// notification.
+function todaysShift(run, busId) {
+  const row = busShift(SHIFTS, toDateKey(sampleNow()), run, busId)
+  if (!row?.routeId) return null
+  const route = ROUTES[row.routeId]
+  return {
+    stops: runStops(route, run),
+    date: row.date,
+    bus: {
+      ...BUSES[busId],
+      route: route.name,
+      driver: DRIVERS[row.driverId] ?? null,
+    },
+  }
+}
+
+// The run this child is on while it is on the way, with the bus and the
+// driver the schedule put on it; null at any other time. Parents see the
+// driver only then (FR-2.6).
 function activeRun(child, now) {
-  for (const trip of TRIPS) {
-    const busId =
-      trip.kind === 'morning' ? child.morningBusId : child.eveningBusId
-    if (trip.busId !== busId) continue
-    const progress = tripProgress(withArrivalTimes(trip), now)
-    if (progress.status === 'on-the-way') {
-      return { kind: trip.kind, bus: BUSES[busId] }
-    }
+  for (const run of RUNS) {
+    const shift = todaysShift(run, child[`${run}BusId`])
+    if (!shift) continue
+    const progress = tripProgress(withArrivalTimes(shift), now)
+    if (progress.status === 'on-the-way') return { kind: run, bus: shift.bus }
   }
   return null
 }
@@ -89,24 +111,24 @@ export async function getCurrentTerm() {
   return currentTerm
 }
 
-// The morning trip carrying this family's children, and where the bus is now.
-// The pages call this every 10 seconds (polling, NFR-8).
+// The morning run carrying this family's children, with the bus and driver
+// the schedule put on it, and where the bus is now. The pages call this
+// every 10 seconds (polling, NFR-8).
 export async function getMorningTrip() {
   await simulateNetwork(200)
   const child = store.children.find((c) => c.morningBusId && c.pickup?.stopId)
   if (!child) return null
+  const shift = todaysShift('morning', child.morningBusId)
+  if (!shift) return null
 
-  const trip = TRIPS.find(
-    (t) => t.kind === 'morning' && t.busId === child.morningBusId,
-  )
-  const stops = withArrivalTimes(trip)
+  const stops = withArrivalTimes(shift)
   const now = sampleNow()
   const riders = store.children
-    .filter((c) => c.morningBusId === trip.busId)
+    .filter((c) => c.morningBusId === child.morningBusId)
     .map((c) => c.name.split(' ')[0])
 
   return {
-    bus: BUSES[trip.busId],
+    bus: shift.bus,
     stops,
     yourStopId: child.pickup.stopId,
     riders,
@@ -153,17 +175,20 @@ export async function saveChild(values, childId) {
   if (childId) {
     const child = findChild(childId)
     // A moved pin needs a new stop from the transport office; an unchanged
-    // one keeps its stop on the bus route.
+    // one keeps its stop on the route.
     details.pickup = keepStop(child.pickup, details.pickup)
     details.dropoff = keepStop(child.dropoff, details.dropoff)
     Object.assign(child, details)
     return withDetails(child)
   }
 
-  // New children wait for the transport office to assign a bus (FR-2.5).
+  // New children wait for the transport office to put them on a route and
+  // a bus (FR-2.5).
   const child = {
     id: crypto.randomUUID(),
+    morningRouteId: null,
     morningBusId: null,
+    eveningRouteId: null,
     eveningBusId: null,
     ...details,
   }

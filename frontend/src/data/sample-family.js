@@ -1,5 +1,6 @@
 // Jane Mwangi's family, matching the canvas designs.
-// `stopId` links a pickup or drop-off point to a stop on the bus's trip.
+// Each child has a route and a bus for each run. `stopId` links a pickup or
+// drop-off point to a stop on the route.
 const ARGWINGS_KODHEK = {
   address: 'Argwings Kodhek Rd, Kilimani, Nairobi',
   landmark: 'Green gate next to Yaya Centre parking exit',
@@ -22,7 +23,9 @@ export const SAMPLE_FAMILY = {
       photoUrl: '/sample/children/wanjiku-mwangi.svg',
       grade: 'Grade 4',
       plan: 'both',
+      morningRouteId: 'route-kilimani',
       morningBusId: 'bus-03',
+      eveningRouteId: 'route-kilimani',
       eveningBusId: 'bus-03',
       pickup: ARGWINGS_KODHEK,
       dropoff: ARGWINGS_KODHEK,
@@ -33,7 +36,9 @@ export const SAMPLE_FAMILY = {
       photoUrl: '/sample/children/baraka-mwangi.svg',
       grade: 'Grade 1',
       plan: 'morning',
+      morningRouteId: 'route-kilimani',
       morningBusId: 'bus-03',
+      eveningRouteId: null,
       eveningBusId: null,
       pickup: ARGWINGS_KODHEK,
       dropoff: null,

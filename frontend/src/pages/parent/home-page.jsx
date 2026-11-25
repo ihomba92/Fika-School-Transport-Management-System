@@ -50,7 +50,7 @@ export function ParentHomePage() {
           Wide screens: children on the left; balance and updates on the right.
           Grid placement (not `order`) keeps the reading order sensible for
           screen readers on both. */}
-      <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_340px] xl:grid-rows-[auto_1fr]">
+      <div className="grid grid-cols-1 items-start gap-6 xl:grid-cols-[minmax(0,1fr)_340px] xl:grid-rows-[auto_1fr]">
         <BalanceCard
           className="xl:col-start-2 xl:row-start-1"
           familyChildren={family.children}

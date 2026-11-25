@@ -126,3 +126,23 @@ export function numberedStopMarker(number, state) {
     [0, 0],
   )
 }
+
+// A bus on the admin's fleet map: "Bus 03" in a chip. `tone` is 'live',
+// 'lost' (no signal: grey, crossed out) or 'done' (arrived). The selected
+// bus gets a yellow ring.
+export function fleetBusMarker(label, tone, isSelected) {
+  const tones = {
+    live: 'bg-sidebar text-sidebar-foreground',
+    lost: 'bg-muted text-muted-foreground border border-border line-through',
+    done: 'bg-card text-muted-foreground border border-border',
+  }
+  const ring = isSelected ? 'ring-6 ring-primary/60' : ''
+  return marker(
+    `<div class="flex w-max -translate-x-1/2 -translate-y-1/2 items-center gap-1.5 rounded-full py-1 pr-3 pl-1 text-xs font-bold shadow-md ${tones[tone]} ${ring}">
+      <span class="grid size-6 place-items-center rounded-full bg-primary text-primary-foreground">${svg('bus', 13)}</span>
+      ${escapeHtml(label)}
+    </div>`,
+    [0, 0],
+    [0, 0],
+  )
+}

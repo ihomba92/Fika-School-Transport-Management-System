@@ -6,7 +6,7 @@ export function PageLoading({ label = 'Loading' }) {
       <span className="sr-only">{label}…</span>
       <div className="h-10 w-64 animate-pulse rounded-xl bg-muted" />
       <div className="h-48 animate-pulse rounded-3xl bg-muted" />
-      <div className="grid gap-6 md:grid-cols-2">
+      <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
         <div className="h-40 animate-pulse rounded-3xl bg-muted" />
         <div className="h-40 animate-pulse rounded-3xl bg-muted" />
       </div>

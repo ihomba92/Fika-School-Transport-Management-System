@@ -34,15 +34,13 @@ export function DriverProfilePage() {
           src={driver.photoUrl}
           className="size-28 rounded-3xl text-3xl"
         />
-        <dl className="grid flex-1 gap-4 sm:grid-cols-2">
+        <dl className="grid flex-1 grid-cols-1 gap-4 sm:grid-cols-2">
           <Detail label="Name" value={driver.name} />
           <Detail label="Licence number" value={driver.licence} />
           <Detail label="Bus" value={`${bus.number} · ${bus.plate}`} />
           <Detail label="Route" value={bus.route} />
         </dl>
       </Card>
-
-    
 
       <PhoneForm
         key={driver.phone}
