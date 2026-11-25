@@ -24,7 +24,7 @@ export function ParentChildrenPage() {
         />
         <AddChildLink />
       </div>
-      <div className="grid items-start gap-6 xl:grid-cols-2">
+      <div className="grid grid-cols-1 items-start gap-6 xl:grid-cols-2">
         {children.map((child) => (
           <ChildCard key={child.id} child={child} />
         ))}

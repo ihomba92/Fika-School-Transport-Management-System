@@ -1,4 +1,4 @@
-// The students who ride Bus 03, with the stop where each gets on (morning) or
+// The students on Bus 03 (all on the Kilimani route), with the stop where each gets on (morning) or
 // off (evening) and the guardian the driver can call (FR-4.2).
 // `eveningStopId: null` means the student is not on the evening run.
 // Names and phone numbers are made up for the sample.

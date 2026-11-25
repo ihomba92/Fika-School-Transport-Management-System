@@ -26,22 +26,28 @@ const newPassword = z
     'Include at least one special character, such as ! @ # or ?',
   )
 
-// Also used by the M-Pesa payment form.
-export const kenyanPhone = z
-  .string()
-  .trim()
-  .min(1, 'Enter your phone number')
-  .transform((value, ctx) => {
-    const normalized = normalizeKenyanPhone(value)
-    if (!normalized) {
-      ctx.addIssue({
-        code: 'custom',
-        message: 'Enter a Kenyan mobile number, for example 712 345 678',
-      })
-      return z.NEVER
-    }
-    return normalized
-  })
+// A Kenyan mobile number. `missingMessage` lets each form word the empty
+// case for who is filling it in ("your" number, or "the driver's").
+export function kenyanPhoneRule(missingMessage = 'Enter your phone number') {
+  return z
+    .string()
+    .trim()
+    .min(1, missingMessage)
+    .transform((value, ctx) => {
+      const normalized = normalizeKenyanPhone(value)
+      if (!normalized) {
+        ctx.addIssue({
+          code: 'custom',
+          message: 'Enter a Kenyan mobile number, for example 712 345 678',
+        })
+        return z.NEVER
+      }
+      return normalized
+    })
+}
+
+// Also used by the M-Pesa payment form and the driver's Profile page.
+export const kenyanPhone = kenyanPhoneRule()
 
 const consent = z.literal(true, {
   error: 'Please agree to the terms and privacy notice to continue',

@@ -3,7 +3,10 @@ import { atNairobiTime } from './dates'
 import {
   firstName,
   formatDayMonth,
+  formatWeekday,
+  plural,
   formatKes,
+  formatKesCompact,
   formatLocalPhone,
   formatPhone,
   formatLongDate,
@@ -40,6 +43,12 @@ describe('money and dates', () => {
     expect(formatKes(22500)).toBe('KES 22,500')
   })
 
+  it('shortens millions for summary cards', () => {
+    expect(formatKesCompact(2348750)).toBe('KES 2.35M')
+    expect(formatKesCompact(2000000)).toBe('KES 2M')
+    expect(formatKesCompact(108500)).toBe('KES 108,500')
+  })
+
   it('formats days, times and long dates in Nairobi time', () => {
     expect(formatDayMonth('2026-10-01')).toBe('1 Oct')
     expect(formatTime(morning)).toBe('06:52')
@@ -69,5 +78,13 @@ describe('money and dates', () => {
       'Good afternoon',
     )
     expect(greeting(atNairobiTime('2026-10-13', '19:00'))).toBe('Good evening')
+  })
+})
+
+describe('formatWeekday and plural', () => {
+  it('names the weekday and counts in words', () => {
+    expect(formatWeekday('2026-10-13')).toBe('Tue')
+    expect(plural(1, 'student')).toBe('1 student')
+    expect(plural(4, 'student')).toBe('4 students')
   })
 })

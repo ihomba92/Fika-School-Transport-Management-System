@@ -1,5 +1,7 @@
 import {
   Bell,
+  CalendarDays,
+  IdCard,
   UserRound,
   Bus,
   LayoutGrid,
@@ -22,12 +24,16 @@ export const NAVIGATION = {
         items: [
           { to: '/admin', label: 'Dashboard', icon: LayoutGrid, end: true },
           { to: '/admin/live-map', label: 'Live map', icon: MapIcon },
+          { to: '/admin/schedule', label: 'Schedule', icon: CalendarDays },
           { to: '/admin/routes', label: 'Routes & assignment', icon: Route },
         ],
       },
       {
         title: 'People',
-        items: [{ to: '/admin/students', label: 'Students', icon: Users }],
+        items: [
+          { to: '/admin/students', label: 'Students', icon: Users },
+          { to: '/admin/drivers', label: 'Drivers & buses', icon: IdCard },
+        ],
       },
       {
         title: 'Finance',

@@ -42,7 +42,7 @@ export function ParentPaymentsPage() {
         />
       </div>
 
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
         <SummaryCard label="Term total" amount={totals.fee}>
           <p className="text-sm text-muted-foreground">
             {children
@@ -149,7 +149,7 @@ function ByChildTable({ familyChildren }) {
   return (
     <Card className="overflow-hidden">
       <h2 className="p-5 pb-3 font-heading text-lg font-bold">By child</h2>
-      <div className="overflow-x-auto">
+      <div className="relative overflow-x-auto">
         <table className="w-full min-w-[560px] text-sm">
           <thead className="border-y bg-muted/50 text-left font-mono text-[11px] tracking-[0.08em] text-muted-foreground uppercase">
             <tr>

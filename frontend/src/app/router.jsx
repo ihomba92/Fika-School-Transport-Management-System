@@ -102,6 +102,27 @@ export const router = createBrowserRouter([
         ),
       },
       {
+        path: 'schedule',
+        lazy: lazyPage(
+          () => import('@/pages/admin/schedule-page'),
+          'AdminSchedulePage',
+        ),
+      },
+      {
+        path: 'routes/new',
+        lazy: lazyPage(
+          () => import('@/pages/admin/route-form-page'),
+          'AdminRouteFormPage',
+        ),
+      },
+      {
+        path: 'routes/:routeId/edit',
+        lazy: lazyPage(
+          () => import('@/pages/admin/route-form-page'),
+          'AdminRouteFormPage',
+        ),
+      },
+      {
         path: 'routes',
         lazy: lazyPage(
           () => import('@/pages/admin/routes-page'),
@@ -113,6 +134,34 @@ export const router = createBrowserRouter([
         lazy: lazyPage(
           () => import('@/pages/admin/students-page'),
           'AdminStudentsPage',
+        ),
+      },
+      {
+        path: 'students/:studentId',
+        lazy: lazyPage(
+          () => import('@/pages/admin/student-profile-page'),
+          'AdminStudentProfilePage',
+        ),
+      },
+      {
+        path: 'drivers',
+        lazy: lazyPage(
+          () => import('@/pages/admin/drivers-page'),
+          'AdminDriversPage',
+        ),
+      },
+      {
+        path: 'drivers/new',
+        lazy: lazyPage(
+          () => import('@/pages/admin/new-driver-page'),
+          'AdminNewDriverPage',
+        ),
+      },
+      {
+        path: 'drivers/buses/new',
+        lazy: lazyPage(
+          () => import('@/pages/admin/new-bus-page'),
+          'AdminNewBusPage',
         ),
       },
       {

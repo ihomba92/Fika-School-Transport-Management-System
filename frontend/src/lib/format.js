@@ -19,6 +19,12 @@ export function formatKes(amount) {
   return `KES ${numberFormat.format(amount)}`
 }
 
+// 2348750 → "KES 2.35M"; under a million it is written out: "KES 108,500".
+export function formatKesCompact(amount) {
+  if (amount < 1_000_000) return formatKes(amount)
+  return `KES ${(amount / 1_000_000).toFixed(2).replace(/\.?0+$/, '')}M`
+}
+
 // 2500 → "2,500"
 export function formatAmount(amount) {
   return numberFormat.format(amount)
@@ -60,6 +66,11 @@ export function formatTime(date) {
   return timeFormat.format(date)
 }
 
+// '2026-10-13' → "Tue"
+export function formatWeekday(dateKey) {
+  return WEEKDAYS[atNairobiTime(dateKey, '12:00').getUTCDay()]
+}
+
 // A Date → "Tue 13 Oct 2026", in Nairobi.
 export function formatLongDate(date) {
   const dateKey = toDateKey(date)
@@ -95,4 +106,9 @@ export function greeting(now) {
   if (hour < 12) return 'Good morning'
   if (hour < 17) return 'Good afternoon'
   return 'Good evening'
+}
+
+// "1 student", "4 students".
+export function plural(count, word) {
+  return `${count} ${count === 1 ? word : `${word}s`}`
 }

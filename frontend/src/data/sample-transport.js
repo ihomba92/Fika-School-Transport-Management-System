@@ -1,21 +1,31 @@
-// Buses, stops and today's trips. Positions are [latitude, longitude] in
-// Nairobi. Buses are drawn in straight lines between stops for now; real road
-// paths come from OpenRouteService with the routing module.
+// Routes, buses, drivers, stops and the sample day's shifts. Positions are
+// [latitude, longitude] in Nairobi. Routes are drawn in straight lines
+// between stops for now; real road paths come from OpenRouteService with the
+// routing module.
+//
+// Routes, buses and drivers are separate records with no standing links.
+// For every shift (one run on one day) the admin chooses, for each bus, its
+// driver and its route (FR-3.9). These are the parts the parent and driver
+// screens use; the admin's whole school is in sample-fleet.js.
+
+export const DRIVERS = {
+  'driver-03': {
+    id: 'driver-03',
+    name: 'Peter Otieno',
+    phone: '+254711204551',
+    licence: 'DL-0482-2019',
+    // Added by the admin when the driver's account is created (FR-3.8).
+    // This sample is an illustration; real photos are uploaded files.
+    photoUrl: '/sample/drivers/peter-otieno.svg',
+  },
+}
+
 export const BUSES = {
   'bus-03': {
     id: 'bus-03',
     number: 'Bus 03',
     plate: 'KDA 482K',
     seats: 40,
-    route: 'Kilimani route',
-    driver: {
-      name: 'Peter Otieno',
-      phone: '+254711204551',
-      licence: 'DL-0482-2019',
-      // Added by the admin when the driver's account is created (FR-3.8).
-      // This sample is an illustration; real photos are uploaded files.
-      photoUrl: '/sample/drivers/peter-otieno.svg',
-    },
   },
 }
 
@@ -90,19 +100,18 @@ const STOPS = {
   },
 }
 
-// A trip lists its stops in order with the planned time at each.
+// A route lists its stops in order with the planned time at each.
 function stopsAt(timetable) {
   return timetable.map(([id, time]) => ({ id, ...STOPS[id], time }))
 }
 
-// Bus 03's trips on the sample day. Morning: depot → stops → school.
-// Evening: school → stops in reverse → depot.
-export const TRIPS = [
-  {
-    id: 'trip-03-am',
-    busId: 'bus-03',
-    kind: 'morning',
-    date: '2026-10-13',
+// A route is its stops in morning order (depot first, school last) with
+// their times. The evening run is the same stops in reverse (runStops in
+// lib/shifts.js).
+export const ROUTES = {
+  'route-kilimani': {
+    id: 'route-kilimani',
+    name: 'Kilimani route',
     stops: stopsAt([
       ['depot', '06:15'],
       ['s1', '06:24'],
@@ -119,25 +128,27 @@ export const TRIPS = [
       ['school', '07:41'],
     ]),
   },
+}
+
+// The sample day's shifts for Bus 03, as the admin scheduled them: Peter
+// drives it on the Kilimani route, morning and evening. Each shift with a
+// route is one run (a trip).
+export const SAMPLE_DATE = '2026-10-13'
+export const SHIFTS = [
+  {
+    id: 'trip-03-am',
+    date: SAMPLE_DATE,
+    run: 'morning',
+    busId: 'bus-03',
+    driverId: 'driver-03',
+    routeId: 'route-kilimani',
+  },
   {
     id: 'trip-03-pm',
+    date: SAMPLE_DATE,
+    run: 'evening',
     busId: 'bus-03',
-    kind: 'evening',
-    date: '2026-10-13',
-    stops: stopsAt([
-      ['school', '15:45'],
-      ['s11', '15:58'],
-      ['s10', '16:08'],
-      ['s9', '16:18'],
-      ['s8', '16:26'],
-      ['s7', '16:29'],
-      ['s6', '16:31'],
-      ['s5', '16:36'],
-      ['s4', '16:41'],
-      ['s3', '16:47'],
-      ['s2', '16:53'],
-      ['s1', '17:00'],
-      ['depot', '17:10'],
-    ]),
+    driverId: 'driver-03',
+    routeId: 'route-kilimani',
   },
 ]

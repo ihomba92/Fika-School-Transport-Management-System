@@ -70,7 +70,7 @@ export function ParentChildFormPage() {
             : 'The school assigns a bus once you save. We will tell you the bus number and driver.'
         }
       />
-      <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
+      <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
         <ChildForm
           defaultValues={defaultValues}
           termFee={term.fee}

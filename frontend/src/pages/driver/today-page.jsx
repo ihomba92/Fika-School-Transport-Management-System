@@ -35,7 +35,7 @@ export function DriverTodayPage() {
         now={now}
         onStartFailed={day.reload}
       />
-      <div className="grid gap-4 md:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         {trips.map((trip) => (
           <TripCard
             key={trip.id}
@@ -44,7 +44,7 @@ export function DriverTodayPage() {
           />
         ))}
       </div>
-      <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
+      <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
         {featured && <RoutePreview trip={featured} />}
         <BeforeYouStart />
       </div>
