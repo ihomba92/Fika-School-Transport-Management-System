@@ -1,9 +1,14 @@
 import { sampleNow } from '@/data/sample-clock'
-import { CURRENT_TERM_ID, TERMS } from '@/data/fee-settings'
+import { CURRENT_TERM_ID } from '@/data/fee-settings'
 import { MORNING_CONDITIONS, SAMPLE_FLEET } from '@/data/sample-fleet'
 import { busLiveStatus } from '@/lib/bus-status'
 import { atNairobiTime, toDateKey } from '@/lib/dates'
-import { feeStatus, planFee, splitIntoInstalments } from '@/lib/fees'
+import {
+  dueDatesFor,
+  feeStatus,
+  planFee,
+  splitIntoInstalments,
+} from '@/lib/fees'
 import { currentRun, runStops, shiftRows } from '@/lib/shifts'
 import { withArrivalTimes } from '@/lib/trip'
 
@@ -16,6 +21,8 @@ import { withArrivalTimes } from '@/lib/trip'
 //   routes    id, name, stops
 //   shifts    id, date, run, busId, driverId, routeId
 //   students  …, morningRouteId, morningBusId, eveningRouteId, eveningBusId
+//   payments  receipt, studentId, termId, amount, paidAt, status, payer
+//   terms     id, name, opens, closes, fee, dueDates   (Fee settings)
 // Buses, drivers and routes have no links of their own: each shift row puts
 // a bus, a driver and a route together for one run (FR-3.9).
 // Changes last until the page is reloaded.
@@ -24,7 +31,21 @@ export class AdminServiceError extends Error {}
 
 export const store = structuredClone(SAMPLE_FLEET)
 
-export const currentTerm = TERMS.find((term) => term.id === CURRENT_TERM_ID)
+// The term whose fees are being paid now. Read it each time: the admin can
+// change it in Fee settings.
+export function currentTerm() {
+  return store.terms.find((term) => term.id === CURRENT_TERM_ID)
+}
+
+// What a student's family has paid this term: its successful payments.
+export function amountPaid(studentId, termId = CURRENT_TERM_ID) {
+  return store.payments
+    .filter(
+      (p) =>
+        p.studentId === studentId && p.termId === termId && p.status === 'paid',
+    )
+    .reduce((total, p) => total + p.amount, 0)
+}
 
 const findIn = (list, id) => list.find((item) => item.id === id) ?? null
 export const findBus = (busId) => findIn(store.buses, busId)
@@ -72,13 +93,19 @@ export function routeLoad(routeId) {
 }
 
 // Fees as the parent screens work them out, so both sides always agree.
-// Students without a bus aren't billed yet.
-function studentFees(student) {
+// Students who are waiting for their first bus aren't billed yet. A student
+// removed from the bus for unpaid fees still owes them. A student who
+// joined mid-term (`joinedOn`) gets 7 days for anything already due.
+// `term` can be a changed copy, to preview a Fee settings change.
+export function studentFees(student, term = currentTerm()) {
   if (student.isWaiting)
     return { status: 'not-billed', fee: 0, paid: 0, balance: 0 }
-  const fee = planFee(currentTerm.fee, student.plan)
-  const paid = Math.round((fee * student.paidShare) / 50) * 50
-  const instalments = splitIntoInstalments(fee, currentTerm.dueDates)
+  const fee = planFee(term.fee, student.plan)
+  const paid = amountPaid(student.id, term.id)
+  const instalments = splitIntoInstalments(
+    fee,
+    dueDatesFor(term.dueDates, student.joinedOn),
+  )
   const today = toDateKey(sampleNow())
   return { fee, paid, ...feeStatus({ fee, paid, instalments, today }) }
 }

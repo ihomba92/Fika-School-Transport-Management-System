@@ -1,13 +1,16 @@
+import { PLANS } from '@/config/plans'
 import { sampleNow } from '@/data/sample-clock'
 import { SCHOOL_LOCATION } from '@/data/sample-transport'
 import { toDateKey } from '@/lib/dates'
 import { nextBusNumber, samePlate } from '@/lib/fleet'
+import { OWN_BUS_SIZE, groupByArea, placementOptions } from '@/lib/grouping'
 import { freeBusSuggestion, routeFit } from '@/lib/route-fit'
 import {
   RUNS,
   busStudents,
   checkShift,
   copyShift,
+  daysOnRoute,
   isPastShift,
   schoolWeek,
   shiftId,
@@ -264,14 +267,33 @@ export async function getRoutes() {
   return { shift: { date: shift.date, run: shift.run }, routes, freeBuses }
 }
 
+const SCHOOL = {
+  name: SCHOOL_LOCATION.name,
+  position: SCHOOL_LOCATION.position,
+}
+
+// A blank route for "New route": one starting stop, and the school.
+export async function getNewRoute() {
+  await simulateNetwork(100)
+  return {
+    name: '',
+    stops: [
+      { name: '', time: '06:15', position: null, studentCount: 0 },
+      { id: 'school', ...SCHOOL, time: '07:30' },
+    ],
+    school: SCHOOL,
+  }
+}
+
 // One route for the editor, with how many students use each stop (a stop
-// with students can't be removed).
+// with students can't be removed), and where the school is.
 export async function getRoute(routeId) {
   await simulateNetwork(200)
   const route = findRoute(routeId)
   if (!route) throw new AdminServiceError('We could not find that route.')
   return {
     ...route,
+    school: SCHOOL,
     stops: route.stops.map((stop) => ({
       ...stop,
       studentCount: store.students.filter(
@@ -340,4 +362,135 @@ export async function saveRoute(routeId, values) {
     ? store.routes.map((r) => (r.id === id ? route : r))
     : [...store.routes, route]
   return route
+}
+
+// ── Students waiting for a bus ───────────────────────────────────────────
+
+// Groups the admin dismissed; they stay waiting, with no suggestion, until
+// the page is reloaded (the real API stores this).
+const dismissedGroups = new Set()
+
+// The buses the schedule puts on a route this week, with their students per
+// run and how many mornings each is on it.
+function busesOnRouteThisWeek(routeId) {
+  const week = schoolWeek(toDateKey(sampleNow()))
+  const busIds = new Set(
+    store.shifts
+      .filter((row) => week.includes(row.date) && row.routeId === routeId)
+      .map((row) => row.busId),
+  )
+  return [...busIds].map((busId) => ({
+    ...findBus(busId),
+    load: busLoad(busId),
+    days: daysOnRoute(store.shifts, week, 'morning', busId, routeId),
+  }))
+}
+
+// "Kileleshwa, Nairobi" → "Kileleshwa", the name most of the group shares.
+function areaName(students) {
+  const names = students.map((s) => s.pickup.address.split(',')[0].trim())
+  return names
+    .toSorted(
+      (a, b) =>
+        names.filter((n) => n === b).length -
+        names.filter((n) => n === a).length,
+    )
+    .at(0)
+}
+
+const groupId = (students) =>
+  students
+    .map((s) => s.id)
+    .toSorted()
+    .join('+')
+
+// FR-3.3, FR-3.4: waiting students grouped by where they live, each group
+// with the ways it could be placed (route, bus and nearest stop), best first.
+export async function getWaitingGroups() {
+  await simulateNetwork(250)
+  const waiting = store.students.filter(
+    (s) => s.isWaiting && s.pickup?.position,
+  )
+  const groups = groupByArea(waiting).map((group) => {
+    const needs = {
+      morning: group.students.filter((s) => PLANS[s.plan].hasMorning).length,
+      evening: group.students.filter((s) => PLANS[s.plan].hasEvening).length,
+    }
+    return {
+      id: groupId(group.students),
+      area: areaName(group.students),
+      students: group.students.map(({ id, name, grade, plan }) => ({
+        id,
+        name,
+        grade,
+        plan,
+      })),
+      spreadKm: group.spreadKm,
+      needs,
+      // Big enough to fill a bus of their own (FR-3.3).
+      canFillBus: group.students.length >= OWN_BUS_SIZE,
+      options: placementOptions(
+        group,
+        store.routes,
+        busesOnRouteThisWeek,
+        needs,
+      ),
+    }
+  })
+  const shown = groups.filter((group) => !dismissedGroups.has(group.id))
+  return {
+    groups: shown,
+    waitingCount: waiting.length,
+    dismissedCount: groups.length - shown.length,
+  }
+}
+
+// FR-3.6: the admin approves a group's placement (the suggested one, or
+// another they chose): each student gets the route and bus for the runs in
+// their plan, and the stop for pickup. Seats are checked for the whole
+// group first, so it is placed all together or not at all.
+export async function approveGroup(studentIds, { routeId, busId, stopId }) {
+  await simulateNetwork()
+  const route = findRoute(routeId)
+  const bus = findBus(busId)
+  if (!route || !bus || !route.stops.some((stop) => stop.id === stopId)) {
+    throw new AdminServiceError('We could not find that route, bus or stop.')
+  }
+  const students = studentIds.map((id) =>
+    store.students.find((s) => s.id === id),
+  )
+  if (students.some((s) => !s?.isWaiting)) {
+    throw new AdminServiceError(
+      'Some of these students already have a bus. Reload to see the latest.',
+    )
+  }
+  const load = busLoad(bus.id)
+  for (const run of RUNS) {
+    const joining = students.filter((s) =>
+      run === 'morning' ? PLANS[s.plan].hasMorning : PLANS[s.plan].hasEvening,
+    ).length
+    if (load[run] + joining > bus.seats) {
+      throw new AdminServiceError(
+        `${bus.number} has ${bus.seats - load[run]} free seats on the ${run} run, not ${joining}.`,
+      )
+    }
+  }
+  for (const student of students) {
+    const plan = PLANS[student.plan]
+    student.morningRouteId = plan.hasMorning ? route.id : null
+    student.morningBusId = plan.hasMorning ? bus.id : null
+    student.eveningRouteId = plan.hasEvening ? route.id : null
+    student.eveningBusId = plan.hasEvening ? bus.id : null
+    student.pickup = { ...student.pickup, stopId }
+    student.isWaiting = false
+    // Fees start now, with 7 days for anything already due.
+    student.joinedOn = toDateKey(sampleNow())
+  }
+  return { route: { id: route.id, name: route.name }, bus }
+}
+
+// FR-3.6: the admin rejects a suggestion. The students stay waiting.
+export async function dismissGroup(id) {
+  await simulateNetwork(200)
+  dismissedGroups.add(id)
 }

@@ -2,7 +2,8 @@ import { Card } from '@/components/common/card'
 import { cn } from '@/lib/utils'
 
 // One number at the top of an admin page, e.g. "6 of 8 buses".
-// `share` (0–1) adds a progress bar; `isDark` makes it stand out.
+// `share` (0–1) adds a progress bar; `isDark` makes it stand out; `isAlert`
+// colours it red for money or problems that need action.
 export function StatCard({
   label,
   icon: Icon,
@@ -11,12 +12,14 @@ export function StatCard({
   note,
   share,
   isDark,
+  isAlert,
 }) {
   return (
     <Card
       className={cn(
         'flex flex-col gap-3 p-5',
         isDark && 'border-sidebar bg-sidebar text-sidebar-foreground',
+        isAlert && 'border-danger/30 bg-danger-soft text-danger',
       )}
     >
       <div className="flex items-start justify-between gap-3">

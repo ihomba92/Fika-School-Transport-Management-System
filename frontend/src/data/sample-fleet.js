@@ -3,7 +3,9 @@
 // route and its students are the same records the parent and driver screens
 // use. The other students are made up from name lists, with a fixed seed so
 // the sample is the same every time.
+import { planFee, splitIntoInstalments } from '@/lib/fees'
 import { schoolWeek, shiftId, RUNS } from '@/lib/shifts'
+import { CURRENT_TERM_ID, TERMS } from './fee-settings'
 import { RIDERS } from './sample-riders'
 import {
   BUSES,
@@ -458,7 +460,15 @@ function buildFleet() {
     )
     students.push({
       ...student,
-      pickup: { address: `${area}, Nairobi`, stopId: null, position },
+      // Homes a few hundred metres apart around the area's centre.
+      pickup: {
+        address: `${area}, Nairobi`,
+        stopId: null,
+        position: [
+          position[0] + ((n % 3) - 1) * 0.0035,
+          position[1] + ((n % 2) - 0.5) * 0.004,
+        ],
+      },
       plan: 'both',
       // Not on a bus yet, so no fee is due (fees start once assigned).
       paidShare: 1,
@@ -466,7 +476,76 @@ function buildFleet() {
     })
   }
 
-  return { buses, drivers, routes, shifts: weekOfShifts(plan), students }
+  return {
+    buses,
+    drivers,
+    routes,
+    shifts: weekOfShifts(plan),
+    ...withPayments(students),
+  }
+}
+
+// This term's M-Pesa payments, made from each student's `paidShare` (the
+// share of the fee their family has paid). The share is then dropped: what
+// a family has paid is the sum of its successful payments, so changing the
+// fee in Fee settings changes balances, never what was paid.
+//   payment  { receipt, studentId, termId, amount, paidAt, status, payer }
+//   status   'paid' | 'failed' | 'cancelled' (only 'paid' counts)
+function withPayments(students) {
+  const term = TERMS.find((t) => t.id === CURRENT_TERM_ID)
+  const payments = []
+  const record = (student, amount, dueDate, status = 'paid') => {
+    // A few days before the due date, at some time between 06:00 and 21:59.
+    const daysBefore = Math.floor(random() * 10)
+    const hour = String(6 + Math.floor(random() * 16)).padStart(2, '0')
+    const minute = String(Math.floor(random() * 60)).padStart(2, '0')
+    const day = new Date(`${dueDate}T12:00:00+03:00`)
+    day.setUTCDate(day.getUTCDate() - daysBefore)
+    payments.push({
+      receipt: receiptCode(),
+      studentId: student.id,
+      termId: term.id,
+      amount,
+      paidAt: `${day.toISOString().slice(0, 10)}T${hour}:${minute}:00+03:00`,
+      status,
+      payer: student.guardian,
+    })
+  }
+
+  const kept = students.map(({ paidShare, ...student }) => {
+    if (student.isWaiting) return student
+    const fee = planFee(term.fee, student.plan)
+    let left = Math.round((fee * paidShare) / 50) * 50
+    for (const { dueDate, amount } of splitIntoInstalments(
+      fee,
+      term.dueDates,
+    )) {
+      if (left <= 0) break
+      // About one family in twelve had a payment fail or cancelled first.
+      if (random() < 0.08) {
+        record(
+          student,
+          Math.min(amount, left),
+          dueDate,
+          random() < 0.5 ? 'failed' : 'cancelled',
+        )
+      }
+      record(student, Math.min(amount, left), dueDate)
+      left -= Math.min(amount, left)
+    }
+    return student
+  })
+  return { students: kept, payments, terms: TERMS }
+}
+
+// An M-Pesa transaction code, such as "SJD4K8Q2LM".
+function receiptCode() {
+  const letters = 'ABCDEFGHJKLMNPQRSTUVWXYZ0123456789'
+  let code = 'SJ'
+  for (let i = 0; i < 8; i += 1) {
+    code += letters[Math.floor(random() * letters.length)]
+  }
+  return code
 }
 
 // The week's shifts: each bus with its planned driver and route, morning

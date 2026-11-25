@@ -152,13 +152,22 @@ function FeesCard({ student }) {
         <Detail label="Paid" value={formatKes(fees.paid)} />
         <Detail label="Balance" value={formatKes(fees.balance)} />
       </dl>
-      {student.isFlagged && (
-        <p className="rounded-2xl bg-danger-soft px-4 py-3 text-sm text-danger">
-          {formatKes(fees.amountDue)} was due on {formatDayMonth(fees.dueDate)}{' '}
-          and the grace period ended on {formatDayMonth(fees.graceEndsOn)}. The
-          system has flagged this student. Nobody is removed from a bus until
-          you choose “No route” and “No bus” below and save.
+      {student.removedOn ? (
+        <p className="rounded-2xl bg-muted px-4 py-3 text-sm text-muted-foreground">
+          Taken off the bus on {formatDayMonth(student.removedOn)} for unpaid
+          fees. Once the balance is paid, choose a route and a bus below to put
+          them back.
         </p>
+      ) : (
+        student.isFlagged && (
+          <p className="rounded-2xl bg-danger-soft px-4 py-3 text-sm text-danger">
+            {formatKes(fees.amountDue)} was due on{' '}
+            {formatDayMonth(fees.dueDate)} and the grace period ended on{' '}
+            {formatDayMonth(fees.graceEndsOn)}. The system has flagged this
+            student. Nobody is removed from a bus until you confirm it on the
+            Payments page.
+          </p>
+        )
       )}
     </Card>
   )
