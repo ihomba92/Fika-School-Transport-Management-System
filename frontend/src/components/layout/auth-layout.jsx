@@ -1,11 +1,13 @@
 import { Outlet } from 'react-router'
+import { BusStopsLine } from '@/components/public/bus-stops-line'
 import { Logo } from './logo'
 
-// Split screen for log in and sign up: brand panel on the left, form on the right.
+// Split screen for log in and sign up: brand panel on the left (a school bus
+// picking children up along its route), form on the right.
 export function AuthLayout() {
   return (
     <div className="flex min-h-screen flex-wrap">
-      <aside className="flex flex-[1_1_480px] flex-col justify-between gap-12 bg-sidebar p-8 text-sidebar-foreground sm:p-12">
+      <aside className="flex flex-[1_1_480px] flex-col justify-between gap-10 overflow-hidden bg-sidebar p-8 text-sidebar-foreground sm:p-12">
         <Logo />
         <div className="flex max-w-md flex-col gap-4">
           <p className="font-mono text-xs font-semibold tracking-[0.12em] text-primary">
@@ -15,6 +17,7 @@ export function AuthLayout() {
             Know where the school bus is. Every trip.
           </h2>
         </div>
+        <BusStopsLine className="-mx-4 w-[calc(100%+2rem)] max-w-2xl sm:mx-0 sm:w-full" />
       </aside>
       <main className="flex flex-[1_1_520px] items-center justify-center px-6 py-12">
         <div className="w-full max-w-md">
