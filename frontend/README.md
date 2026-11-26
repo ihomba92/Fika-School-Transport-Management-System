@@ -343,6 +343,18 @@ What the newer screens need from the database and API:
 
 ## 12. Suggestions for improvement
 
+**Done since the first version of this list**
+
+| Suggestion | What was built | Where |
+|---|---|---|
+| Kiswahili as a second language | English / Kiswahili switch for parents, drivers and the sign-in screens; dates, greetings, plurals and form errors translated; a test that fails on any untranslated text | `src/i18n/`, section 7 *Languages* |
+| Low-data mode for parents | **Save data**: the trip in words instead of the map, on by itself on Data Saver or 2G; a few hundred bytes every 30 s and no map download | `use-low-data.js`, `trip-text-view.jsx`, section 7 *Low-data mode* |
+| Monthly reports | On-time performance by route and trip time, bus occupancy and fee collection, with PDF (print) and CSV export | `/admin/reports`, `lib/reports.js` |
+
+Also added at the school's request: **trip times** by grade (several pickups and drop-offs a day), **new applications** kept apart from students who need a route, the driver's **boarding check** at school with absences carried through the day, and no *Absent* button on drop-offs.
+
+**Still to do**
+
 **Before launch**
 
 - **Map tiles**: OpenStreetMap's free tile server isn't meant for production traffic. Switch to a provider with a key (MapTiler, Stadia, Mapbox) or self-host.
@@ -368,11 +380,11 @@ What the newer screens need from the database and API:
 
 **Product**
 
-- **Kiswahili for the admin screens**, and a native speaker's review of `sw.json`.
-- **Admin roles**: separate permissions for the finance office and the transport office.
-- **Reports from real runs**: record each run's arrival time and riders on the server, render the PDF there (WeasyPrint) and email it to the head teacher on the 1st.
-- **Driver–office messaging** for breakdowns and delays, so the office can update parents from one place.
-- **SMS** for parents with no data at all (Africa's Talking): "Bus 03 is 2 stops from your stop", opt-in.
+- **Admin roles** (next, with the back end's log-in module): separate permissions for the finance office and the transport office, a Staff screen, and an audit log.
+- **Driver–office messaging** for breakdowns and delays: one-tap *Report a problem* for drivers, a Messages inbox for the office, and *Notify parents on this bus*.
+- **Kiswahili for the admin screens**, and a native speaker's review of `sw.json` (especially M‑Pesa, fees and absence messages).
+- **Reports from real runs**: record each run's arrival time and riders on the server, render the PDF there (WeasyPrint) and email it to the head teacher on the 1st. The screen and `lib/reports.js` are ready for it.
+- **SMS** for parents with no data at all (Africa's Talking): "Bus 03 is 2 stops from your stop", opt-in, using the same status as low-data mode.
 
 ---
 
