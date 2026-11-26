@@ -2,16 +2,41 @@ import { describe, expect, it } from 'vitest'
 import {
   busShift,
   busStudents,
-  daysOnRoute,
-  driverShifts,
   checkShift,
   copyShift,
-  currentRun,
+  daysOnRoute,
+  driverShifts,
   isPastShift,
   runStops,
   schoolWeek,
   shiftRows,
 } from './shifts'
+
+const seniorPickup = {
+  id: 'am-senior',
+  name: 'Senior pickup',
+  run: 'morning',
+  time: '06:00',
+  firstGrade: 'Grade 4',
+  lastGrade: 'Grade 9',
+}
+const juniorPickup = {
+  id: 'am-junior',
+  name: 'Junior pickup',
+  run: 'morning',
+  time: '08:00',
+  firstGrade: 'PP1',
+  lastGrade: 'Grade 3',
+}
+const juniorDropoff = {
+  id: 'pm-junior',
+  name: 'Junior drop-off',
+  run: 'evening',
+  time: '14:00',
+  firstGrade: 'PP1',
+  lastGrade: 'Grade 3',
+}
+const trips = [juniorDropoff, juniorPickup, seniorPickup]
 
 describe('schoolWeek', () => {
   it('gives Monday to Friday of the week', () => {
@@ -28,20 +53,25 @@ describe('schoolWeek', () => {
   })
 })
 
-describe('currentRun and isPastShift', () => {
-  const morning = new Date('2026-10-13T06:52:00+03:00')
-  const afternoon = new Date('2026-10-13T14:00:00+03:00')
+describe('isPastShift', () => {
+  const at = (time) => new Date(`2026-10-13T${time}:00+03:00`)
 
-  it('is the morning run until noon in Nairobi', () => {
-    expect(currentRun(morning)).toBe('morning')
-    expect(currentRun(afternoon)).toBe('evening')
-  })
-
-  it("keeps today's running shift open for changes", () => {
-    expect(isPastShift('2026-10-13', 'morning', morning)).toBe(false)
-    expect(isPastShift('2026-10-13', 'morning', afternoon)).toBe(true)
-    expect(isPastShift('2026-10-12', 'evening', morning)).toBe(true)
-    expect(isPastShift('2026-10-14', 'morning', afternoon)).toBe(false)
+  it("keeps today's shift open until a later trip time is on", () => {
+    expect(isPastShift('2026-10-13', seniorPickup, trips, at('06:52'))).toBe(
+      false,
+    )
+    expect(isPastShift('2026-10-13', seniorPickup, trips, at('08:05'))).toBe(
+      true,
+    )
+    expect(isPastShift('2026-10-13', juniorPickup, trips, at('08:05'))).toBe(
+      false,
+    )
+    expect(isPastShift('2026-10-12', juniorDropoff, trips, at('06:52'))).toBe(
+      true,
+    )
+    expect(isPastShift('2026-10-14', seniorPickup, trips, at('15:00'))).toBe(
+      false,
+    )
   })
 })
 
@@ -54,12 +84,19 @@ describe('runStops', () => {
     ],
   }
 
-  it('runs the evening in reverse from 15:45, keeping the gaps', () => {
-    expect(runStops(route, 'morning')).toBe(route.stops)
-    expect(runStops(route, 'evening')).toEqual([
-      { id: 'school', time: '15:45' },
-      { id: 's1', time: '17:02' },
-      { id: 'depot', time: '17:11' },
+  it('starts a pickup at the trip time, keeping the gaps', () => {
+    expect(runStops(route, juniorPickup)).toEqual([
+      { id: 'depot', time: '08:00' },
+      { id: 's1', time: '08:09' },
+      { id: 'school', time: '09:26' },
+    ])
+  })
+
+  it('runs a drop-off in reverse from the trip time', () => {
+    expect(runStops(route, juniorDropoff)).toEqual([
+      { id: 'school', time: '14:00' },
+      { id: 's1', time: '15:17' },
+      { id: 'depot', time: '15:26' },
     ])
   })
 })
@@ -77,8 +114,9 @@ const routes = [
   { id: 'lavington', name: 'Lavington route' },
   { id: 'ruaka', name: 'Ruaka route' },
 ]
-const student = (id, busId, routeId) => ({
+const student = (id, busId, routeId, grade = 'Grade 6') => ({
   id,
+  grade,
   morningBusId: busId,
   morningRouteId: routeId,
   eveningBusId: null,
@@ -90,15 +128,18 @@ const students = [
   student('c', 'bus-01', 'lavington'),
   student('d', 'bus-01', 'ruaka'),
   student('e', 'bus-02', 'ruaka'),
+  // A junior on Bus 01: rides the junior pickup, not the senior one.
+  student('f', 'bus-01', 'lavington', 'PP2'),
 ]
 const row = (busId, driverId, routeId) => ({ busId, driverId, routeId })
-const check = (rows) =>
-  checkShift({ rows, run: 'morning', buses, drivers, routes, students })
+const check = (rows, trip = seniorPickup) =>
+  checkShift({ rows, trip, buses, drivers, routes, students })
 
 describe('busStudents', () => {
-  it('counts the students on a bus for a run', () => {
-    expect(busStudents(students, 'bus-01', 'morning')).toHaveLength(4)
-    expect(busStudents(students, 'bus-01', 'evening')).toHaveLength(0)
+  it('counts the students on a bus for a trip, by grade and run', () => {
+    expect(busStudents(students, 'bus-01', seniorPickup)).toHaveLength(4)
+    expect(busStudents(students, 'bus-01', juniorPickup)).toHaveLength(1)
+    expect(busStudents(students, 'bus-01', juniorDropoff)).toHaveLength(0)
   })
 })
 
@@ -140,6 +181,12 @@ describe('checkShift', () => {
       '2 students on the Ruaka route have no bus on it this shift.',
     ])
   })
+
+  it('only counts the students of the trip’s grades', () => {
+    const result = check([row('bus-01', 'mary', 'lavington')], juniorPickup)
+    expect(result.rowNotes['bus-01']).toBeUndefined()
+    expect(result.shiftNotes).toEqual([])
+  })
 })
 
 describe('copyShift', () => {
@@ -148,7 +195,7 @@ describe('copyShift', () => {
       {
         id: 'x1',
         date: '2026-10-12',
-        run: 'morning',
+        tripId: 'am-senior',
         busId: 'bus-01',
         driverId: 'mary',
         routeId: 'lavington',
@@ -156,7 +203,7 @@ describe('copyShift', () => {
       {
         id: 'x2',
         date: '2026-10-13',
-        run: 'morning',
+        tripId: 'am-senior',
         busId: 'bus-01',
         driverId: 'john',
         routeId: 'ruaka',
@@ -164,29 +211,32 @@ describe('copyShift', () => {
       {
         id: 'x3',
         date: '2026-10-13',
-        run: 'evening',
+        tripId: 'am-junior',
         busId: 'bus-01',
         driverId: 'john',
         routeId: 'ruaka',
       },
     ]
-    const copied = copyShift(shifts, { date: '2026-10-12', run: 'morning' }, [
-      '2026-10-13',
-      '2026-10-14',
-    ])
-    expect(shiftRows(copied, '2026-10-13', 'morning')).toEqual([
+    const copied = copyShift(
+      shifts,
+      { date: '2026-10-12', tripId: 'am-senior' },
+      ['2026-10-13', '2026-10-14'],
+    )
+    expect(shiftRows(copied, '2026-10-13', 'am-senior')).toEqual([
       {
-        id: '2026-10-13-morning-bus-01',
+        id: '2026-10-13-am-senior-bus-01',
         date: '2026-10-13',
-        run: 'morning',
+        tripId: 'am-senior',
         busId: 'bus-01',
         driverId: 'mary',
         routeId: 'lavington',
       },
     ])
-    expect(shiftRows(copied, '2026-10-14', 'morning')).toHaveLength(1)
-    // The evening is untouched.
-    expect(shiftRows(copied, '2026-10-13', 'evening')[0].driverId).toBe('john')
+    expect(shiftRows(copied, '2026-10-14', 'am-senior')).toHaveLength(1)
+    // The other trip time is untouched.
+    expect(shiftRows(copied, '2026-10-13', 'am-junior')[0].driverId).toBe(
+      'john',
+    )
   })
 })
 
@@ -194,39 +244,39 @@ describe('busShift, driverShifts and daysOnRoute', () => {
   const shifts = [
     {
       date: '2026-10-12',
-      run: 'morning',
+      tripId: 'pm-junior',
       busId: 'bus-03',
       driverId: 'peter',
       routeId: 'kilimani',
     },
     {
       date: '2026-10-12',
-      run: 'evening',
+      tripId: 'am-senior',
       busId: 'bus-03',
       driverId: 'peter',
       routeId: 'kilimani',
     },
     {
       date: '2026-10-13',
-      run: 'morning',
+      tripId: 'am-senior',
       busId: 'bus-03',
       driverId: 'joseph',
       routeId: 'karen',
     },
   ]
 
-  it('finds the row for a bus, and the rows for a driver', () => {
-    expect(busShift(shifts, '2026-10-13', 'morning', 'bus-03').driverId).toBe(
+  it('finds the row for a bus, and the rows for a driver in trip order', () => {
+    expect(busShift(shifts, '2026-10-13', 'am-senior', 'bus-03').driverId).toBe(
       'joseph',
     )
-    expect(busShift(shifts, '2026-10-13', 'evening', 'bus-03')).toBeNull()
+    expect(busShift(shifts, '2026-10-13', 'am-junior', 'bus-03')).toBeNull()
     expect(
-      driverShifts(shifts, '2026-10-12', 'peter').map((r) => r.run),
-    ).toEqual(['morning', 'evening'])
+      driverShifts(shifts, trips, '2026-10-12', 'peter').map((r) => r.tripId),
+    ).toEqual(['am-senior', 'pm-junior'])
   })
 
   it('counts the days a bus runs a route', () => {
     const week = ['2026-10-12', '2026-10-13']
-    expect(daysOnRoute(shifts, week, 'morning', 'bus-03', 'kilimani')).toBe(1)
+    expect(daysOnRoute(shifts, week, 'am-senior', 'bus-03', 'kilimani')).toBe(1)
   })
 })

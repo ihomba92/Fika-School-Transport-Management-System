@@ -3,10 +3,12 @@ import { Card } from '@/components/common/card'
 import { formatTime } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import { TRIP_KINDS, streetName } from './trip-names'
+import { useTranslation } from 'react-i18next'
 
 // The right-hand column of the Active trip page: three numbers that matter
 // (on board, arrival at the last stop, stops left) and every stop in order.
 export function TripSidePanel({ trip }) {
+  const { t } = useTranslation()
   const { lastStop } = TRIP_KINDS[trip.kind]
   const lastIndex = trip.stops.length - 1
   const listed = trip.stops.filter(
@@ -16,17 +18,20 @@ export function TripSidePanel({ trip }) {
   return (
     <aside className="flex flex-col gap-4">
       <dl className="grid grid-cols-3 gap-2 rounded-3xl bg-sidebar p-3 text-sidebar-foreground">
-        <Stat label="On board" value={`${trip.onBoard}/${trip.riderCount}`} />
         <Stat
-          label={lastStop}
+          label={t('On board')}
+          value={`${trip.onBoard}/${trip.riderCount}`}
+        />
+        <Stat
+          label={t(lastStop)}
           value={formatTime(trip.stops[lastIndex].arrivesAt)}
           isHighlighted
         />
-        <Stat label="Stops left" value={trip.stopsLeft} />
+        <Stat label={t('Stops left')} value={trip.stopsLeft} />
       </dl>
 
       <Card className="flex flex-col gap-2 p-5">
-        <h2 className="font-heading text-lg font-bold">Stops</h2>
+        <h2 className="font-heading text-lg font-bold">{t('Stops')}</h2>
         <ol className="flex flex-col gap-1">
           {listed.map((stop) => (
             <StopRow
@@ -62,6 +67,7 @@ function Stat({ label, value, isHighlighted }) {
 }
 
 function StopRow({ stop, number, isNext, kind }) {
+  const { t } = useTranslation()
   return (
     <li
       aria-current={isNext ? 'step' : undefined}
@@ -80,7 +86,7 @@ function StopRow({ stop, number, isNext, kind }) {
         {stop.isDone ? (
           <>
             <Check className="size-3.5" aria-hidden="true" />
-            <span className="sr-only">Done</span>
+            <span className="sr-only">{t('Done')}</span>
           </>
         ) : (
           number
@@ -96,7 +102,7 @@ function StopRow({ stop, number, isNext, kind }) {
           {streetName(stop)}
         </span>
         <span className="text-xs text-muted-foreground">
-          {stopSummary(stop, kind)}
+          {stopSummary(stop, kind, t)}
         </span>
       </span>
       <time className="font-mono text-xs font-semibold">
@@ -107,16 +113,38 @@ function StopRow({ stop, number, isNext, kind }) {
 }
 
 // "2 picked up · 1 absent", or "3 students" before the bus gets there.
-function stopSummary(stop, kind) {
+// On a drop-off, children absent that day show as "not on the bus".
+function stopSummary(stop, kind, t) {
   if (!stop.hasRiders) return stop.landmark
   const marked = stop.riders.filter((rider) => rider.mark)
   if (marked.length === 0) {
-    return `${stop.riders.length} ${stop.riders.length === 1 ? 'student' : 'students'}`
+    return t('{{count}} students', { count: stop.riders.length })
   }
   const absent = marked.filter((rider) => rider.mark.mark === 'absent').length
   const done = marked.length - absent
+  const waiting = stop.riders.length - marked.length
   const parts = []
-  if (done) parts.push(`${done} ${TRIP_KINDS[kind].doneVerb}`)
-  if (absent) parts.push(`${absent} absent`)
+  const count = (key, value) => t(key, { count: value })
+  if (waiting) {
+    parts.push(
+      kind === 'morning'
+        ? count('{{count}} to pick up', waiting)
+        : count('{{count}} to drop off', waiting),
+    )
+  }
+  if (done) {
+    parts.push(
+      kind === 'morning'
+        ? count('{{count}} picked up', done)
+        : count('{{count}} dropped off', done),
+    )
+  }
+  if (absent) {
+    parts.push(
+      kind === 'morning'
+        ? count('{{count}} absent', absent)
+        : count('{{count}} not on the bus', absent),
+    )
+  }
   return parts.join(' · ')
 }

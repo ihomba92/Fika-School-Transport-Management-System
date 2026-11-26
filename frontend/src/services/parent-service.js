@@ -11,8 +11,11 @@ import {
 } from '@/data/sample-transport'
 import { toDateKey } from '@/lib/dates'
 import { feeStatus, planFee, splitIntoInstalments } from '@/lib/fees'
-import { RUNS, busShift, runStops } from '@/lib/shifts'
+import { busShift, runStops } from '@/lib/shifts'
+import { RUNS, tripFor } from '@/lib/trip-times'
+import { SAMPLE_TRIP_TIMES } from '@/data/trip-times'
 import { tripProgress, withArrivalTimes } from '@/lib/trip'
+import { summarizeTrip } from '@/lib/trip-summary'
 import { simulateNetwork } from './mock-network'
 
 // Stand-in for the parent part of the Flask API. Changes are kept in memory,
@@ -36,16 +39,24 @@ function childFee(child) {
   return { fee, paid, ...feeStatus({ fee, paid, instalments, today }) }
 }
 
+// The trip time a child rides on a run: the school's pickup (or drop-off)
+// for their grade. Small children come later and go home earlier.
+function childTrip(child, run) {
+  if (!child[`${run}BusId`]) return null
+  return tripFor(SAMPLE_TRIP_TIMES, run, child.grade)
+}
+
 // A child has a route and a bus for each run. Who drives the bus, and the
 // route it runs, are set per shift in the admin's schedule (FR-3.11), so a
 // change shows up here the next time the page loads; parents aren't sent a
 // notification.
-function todaysShift(run, busId) {
-  const row = busShift(SHIFTS, toDateKey(sampleNow()), run, busId)
+function todaysShift(trip, busId) {
+  const row = busShift(SHIFTS, toDateKey(sampleNow()), trip.id, busId)
   if (!row?.routeId) return null
   const route = ROUTES[row.routeId]
   return {
-    stops: runStops(route, run),
+    trip: { id: trip.id, name: trip.name, time: trip.time },
+    stops: runStops(route, trip),
     date: row.date,
     bus: {
       ...BUSES[busId],
@@ -60,17 +71,27 @@ function todaysShift(run, busId) {
 // driver only then (FR-2.6).
 function activeRun(child, now) {
   for (const run of RUNS) {
-    const shift = todaysShift(run, child[`${run}BusId`])
+    const trip = childTrip(child, run)
+    const shift = trip && todaysShift(trip, child[`${run}BusId`])
     if (!shift) continue
     const progress = tripProgress(withArrivalTimes(shift), now)
-    if (progress.status === 'on-the-way') return { kind: run, bus: shift.bus }
+    if (progress.status === 'on-the-way') {
+      return { kind: run, name: trip.name, bus: shift.bus }
+    }
   }
   return null
 }
 
+const tripTimes = (trip) => trip && { name: trip.name, time: trip.time }
+
 function withDetails(child) {
   return {
     ...child,
+    // A child the parent added waits for the office: 'applied', then
+    // 'needs-route' once accepted, then 'on-route' with a bus.
+    stage: child.stage ?? 'on-route',
+    pickupTrip: tripTimes(childTrip(child, 'morning')),
+    dropoffTrip: tripTimes(childTrip(child, 'evening')),
     morningBus: BUSES[child.morningBusId] ?? null,
     eveningBus: BUSES[child.eveningBusId] ?? null,
     activeRun: activeRun(child, sampleNow()),
@@ -111,30 +132,84 @@ export async function getCurrentTerm() {
   return currentTerm
 }
 
-// The morning run carrying this family's children, with the bus and driver
-// the schedule put on it, and where the bus is now. The pages call this
-// every 10 seconds (polling, NFR-8).
+// The pickup carrying this family's children, with the bus and driver the
+// schedule put on it, and where the bus is now. Children of different
+// grades can ride different pickups (the seniors first, then the juniors):
+// this is the one on the way, else the next one today, else the first.
+// The pages call this every 10 seconds (polling, NFR-8).
 export async function getMorningTrip() {
   await simulateNetwork(200)
-  const child = store.children.find((c) => c.morningBusId && c.pickup?.stopId)
-  if (!child) return null
-  const shift = todaysShift('morning', child.morningBusId)
-  if (!shift) return null
-
-  const stops = withArrivalTimes(shift)
   const now = sampleNow()
+  const runs = store.children
+    .filter((c) => c.morningBusId && c.pickup?.stopId)
+    .map((child) => {
+      const trip = childTrip(child, 'morning')
+      const shift = trip && todaysShift(trip, child.morningBusId)
+      if (!shift) return null
+      const stops = withArrivalTimes(shift)
+      return { child, trip, shift, stops, progress: tripProgress(stops, now) }
+    })
+    .filter(Boolean)
+  const pick =
+    runs.find((r) => r.progress.status === 'on-the-way') ??
+    runs
+      .filter((r) => r.progress.status === 'not-started')
+      .sort((a, b) => a.stops[0].arrivesAt - b.stops[0].arrivesAt)[0] ??
+    runs[0]
+  if (!pick) return null
+  const { child, trip, shift, stops } = pick
   const riders = store.children
-    .filter((c) => c.morningBusId === child.morningBusId)
+    .filter(
+      (c) =>
+        c.morningBusId === child.morningBusId &&
+        childTrip(c, 'morning')?.id === trip.id,
+    )
     .map((c) => c.name.split(' ')[0])
 
   return {
+    trip: shift.trip,
     bus: shift.bus,
     stops,
     yourStopId: child.pickup.stopId,
     riders,
     school: SCHOOL_LOCATION,
-    progress: tripProgress(stops, now),
+    progress: pick.progress,
     updatedAt: now,
+  }
+}
+
+// The same trip as getMorningTrip, as a few hundred bytes for low-data
+// mode: no route or stop positions, only what the text view says. The
+// real API answers GET /parent/trip/status with this shape.
+export async function getTripStatus() {
+  await simulateNetwork(150)
+  const trip = await getMorningTrip()
+  if (!trip) return null
+  const summary = summarizeTrip(trip, trip.updatedAt)
+  const isCarrying = summary.phase === 'coming' || summary.phase === 'to-school'
+  const stop = (s) => s && { name: s.name, arrivesAt: s.arrivesAt }
+  return {
+    trip: trip.trip,
+    // The driver only while the bus carries the children (FR-2.6).
+    bus: {
+      number: trip.bus.number,
+      plate: trip.bus.plate,
+      driver: isCarrying
+        ? { name: trip.bus.driver.name, phone: trip.bus.driver.phone }
+        : null,
+    },
+    riders: trip.riders,
+    summary: {
+      phase: summary.phase,
+      minutesAway: summary.minutesAway ?? null,
+      stopsAway: summary.stopsAway ?? null,
+      yourStop: stop(summary.yourStop),
+      school: stop(summary.school),
+      firstStop: stop(summary.firstStop),
+      lastPassed: stop(summary.lastPassed),
+      nextStop: stop(summary.nextStop),
+    },
+    updatedAt: trip.updatedAt,
   }
 }
 
@@ -182,10 +257,11 @@ export async function saveChild(values, childId) {
     return withDetails(child)
   }
 
-  // New children wait for the transport office to put them on a route and
-  // a bus (FR-2.5).
+  // New children are an application: the transport office accepts them,
+  // then puts them on a route and a bus (FR-2.5).
   const child = {
     id: crypto.randomUUID(),
+    stage: 'applied',
     morningRouteId: null,
     morningBusId: null,
     eveningRouteId: null,

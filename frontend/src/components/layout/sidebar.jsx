@@ -3,25 +3,31 @@ import { School } from 'lucide-react'
 import { Logo } from './logo'
 import { SCHOOL } from '@/data/school'
 import { cn } from '@/lib/utils'
+import { useTranslation } from 'react-i18next'
 
 export function Sidebar({ navigation, homePath, onNavigate, className }) {
+  const { t } = useTranslation()
   return (
     <nav
-      aria-label="Main"
+      aria-label={t('Main')}
       className={cn(
         'flex w-64 flex-col gap-6 bg-sidebar px-3.5 py-5 text-sidebar-foreground',
         className,
       )}
     >
       <div className="border-b border-sidebar-border px-2 pb-5">
-        <Logo to={homePath} subtitle={navigation.label} onClick={onNavigate} />
+        <Logo
+          to={homePath}
+          subtitle={t(navigation.label)}
+          onClick={onNavigate}
+        />
       </div>
 
       <div className="flex flex-1 flex-col gap-6">
         {navigation.sections.map((section) => (
           <div key={section.title} className="flex flex-col gap-1">
             <p className="px-4 pb-1.5 font-mono text-[11px] font-semibold tracking-[0.08em] text-sidebar-foreground/60 uppercase">
-              {section.title}
+              {t(section.title)}
             </p>
             {section.items.map((item) => (
               <SidebarLink key={item.to} item={item} onNavigate={onNavigate} />
@@ -47,6 +53,7 @@ export function Sidebar({ navigation, homePath, onNavigate, className }) {
 
 function SidebarLink({ item, onNavigate }) {
   const Icon = item.icon
+  const { t } = useTranslation()
 
   return (
     <NavLink
@@ -63,7 +70,7 @@ function SidebarLink({ item, onNavigate }) {
       }
     >
       <Icon className="size-[18px]" aria-hidden="true" />
-      {item.label}
+      {t(item.label)}
     </NavLink>
   )
 }

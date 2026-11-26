@@ -1,10 +1,10 @@
 // How a route's students fit the buses on it in a shift (FR-3.10). Pure
 // functions shared by the mock service and the Routes screen.
 
-// A route needs as many seats as its busier run: 30 in the morning and 26
-// in the evening needs 30 seats.
+// A route needs as many seats as its busiest trip: 30 on one pickup and 26
+// on a drop-off needs 30 seats. `load` is { trip: students }.
 export function seatsNeeded(load) {
-  return Math.max(load.morning, load.evening)
+  return Math.max(0, ...Object.values(load))
 }
 
 // Over 90% full the route has no room for new students; under half full a

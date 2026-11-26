@@ -4,7 +4,9 @@
 //
 // Each rider gets one mark per trip:
 //   morning  'picked-up' | 'absent'    (at their pickup stop)
-//   evening  'dropped-off' | 'absent'  (at their drop-off stop)
+//   evening  'dropped-off'              (at their drop-off stop)
+//            'absent' comes only from the day's attendance: absent at
+//            pickup, or not here at the boarding check
 
 export const MARK_LABELS = {
   morning: { done: 'picked-up', doneLabel: 'Picked up' },

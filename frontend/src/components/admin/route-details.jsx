@@ -11,7 +11,7 @@ import { suggestionText } from './route-options'
 // students fit their seats, a suggestion, the map, and the stops in order
 // with the students picked up at each (FR-3.10). Buses and drivers are
 // changed in the schedule; the route itself with "Edit route".
-export function RouteDetails({ route, shift }) {
+export function RouteDetails({ route, shift, timesTrip }) {
   const suggestion = suggestionText(route)
   const school = route.stops.at(-1)
   const pickups = route.stops.slice(0, -1)
@@ -28,7 +28,8 @@ export function RouteDetails({ route, shift }) {
       .filter((stop) => stop.riders.length)
       .map((stop, index) => [stop.id, index + 1]),
   )
-  const scheduleLink = `/admin/schedule?date=${shift.date}&run=${shift.run}`
+  const scheduleLink = `/admin/schedule?date=${shift.date}&trip=${shift.trip.id}`
+  const tripName = shift.trip.name.toLowerCase()
 
   return (
     <section
@@ -67,11 +68,11 @@ export function RouteDetails({ route, shift }) {
         <dl className="grid grid-cols-2 gap-3 lg:grid-cols-4">
           <Tile
             label="Students"
-            value={route.fit.used}
-            note={`${route.load.morning} morning · ${route.load.evening} evening`}
+            value={route.studentCount}
+            note={`${route.fit.used} on the ${tripName}`}
           />
           <Tile
-            label="Seats this shift"
+            label="Seats this trip"
             value={route.seats ? `${route.fit.used}/${route.seats}` : 'No bus'}
             note={
               route.fit.share === null
@@ -82,7 +83,7 @@ export function RouteDetails({ route, shift }) {
           <Tile
             label="First pickup"
             value={firstPickup.time}
-            note={streetName(firstPickup)}
+            note={`${timesTrip.name} · ${streetName(firstPickup)}`}
           />
           <Tile
             label="School arrival"
@@ -93,10 +94,12 @@ export function RouteDetails({ route, shift }) {
         </dl>
 
         <div className="flex flex-col gap-2">
-          <h3 className="text-sm font-semibold">Buses on it this shift</h3>
+          <h3 className="text-sm font-semibold">
+            Buses on it for the {tripName}
+          </h3>
           {route.buses.length === 0 ? (
             <p className="rounded-2xl border border-dashed p-4 text-sm text-muted-foreground">
-              No bus is on this route this shift.
+              No bus is on this route for the {tripName}.
             </p>
           ) : (
             <ul className="grid grid-cols-1 gap-2 sm:grid-cols-2">
@@ -144,10 +147,12 @@ export function RouteDetails({ route, shift }) {
           className="h-64 sm:h-80"
         />
         <div className="flex flex-col gap-1 p-6 pb-2">
-          <h3 className="font-heading text-lg font-bold">Morning stops</h3>
+          <h3 className="font-heading text-lg font-bold">Stops</h3>
           <p className="text-sm text-muted-foreground">
-            In driving order. The evening run is the same stops in reverse,
-            leaving school at 15:45.
+            In pickup order, with the times of the{' '}
+            {timesTrip.name.toLowerCase()}. Each pickup time keeps these gaps
+            between stops; drop-offs run the same stops in reverse from their
+            own time.
           </p>
         </div>
         <ol className="flex flex-col divide-y px-6 pb-4">

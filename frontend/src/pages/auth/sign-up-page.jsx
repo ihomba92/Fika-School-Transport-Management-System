@@ -18,8 +18,10 @@ import {
   signUpSchema,
 } from '@/lib/validation/auth-schemas'
 import { signUp } from '@/services/auth-service'
+import { useTranslation } from 'react-i18next'
 
 export function SignUpPage() {
+  const { t } = useTranslation()
   const navigate = useNavigate()
   const google = useGoogleSignIn()
   const [formError, setFormError] = useState(null)
@@ -50,34 +52,36 @@ export function SignUpPage() {
       className="flex flex-col gap-6"
     >
       <PageHeader
-        eyebrow="Parents"
-        title="Create your account"
-        description="You will add your children and their pickup points after you sign in."
+        eyebrow={t('Parents')}
+        title={t('Create your account')}
+        description={t(
+          'You will add your children and their pickup points after you sign in.',
+        )}
       />
 
       {(formError || google.error) && (
-        <FormAlert>{formError || google.error}</FormAlert>
+        <FormAlert>{t(formError || google.error)}</FormAlert>
       )}
 
       <div className="flex flex-col gap-2">
         <GoogleButton onClick={google.start} isBusy={google.isBusy}>
-          Sign up with Google
+          {t('Sign up with Google')}
         </GoogleButton>
         <p className="text-center text-xs text-muted-foreground">
-          Fastest: no password to remember and no confirmation email.
+          {t('Fastest: no password to remember and no confirmation email.')}
         </p>
       </div>
-      <AuthDivider>or sign up with email</AuthDivider>
+      <AuthDivider>{t('or sign up with email')}</AuthDivider>
 
       <FormField
         id="fullName"
-        label="Full name"
+        label={t('Full name')}
         error={errors.fullName?.message}
       >
         {(field) => (
           <TextInput
             autoComplete="name"
-            placeholder="e.g. Jane Mwangi"
+            placeholder={t('e.g. Jane Mwangi')}
             {...field}
             {...register('fullName')}
           />
@@ -86,8 +90,8 @@ export function SignUpPage() {
 
       <FormField
         id="phone"
-        label="Phone number"
-        hint="Used for M-Pesa payments and urgent calls from the driver."
+        label={t('Phone number')}
+        hint={t('Used for M-Pesa payments and urgent calls from the driver.')}
         error={errors.phone?.message}
       >
         {(field) => <PhoneInput {...field} {...register('phone')} />}
@@ -95,8 +99,8 @@ export function SignUpPage() {
 
       <FormField
         id="email"
-        label="Email"
-        hint="We will send a link to confirm this address."
+        label={t('Email')}
+        hint={t('We will send a link to confirm this address.')}
         error={errors.email?.message}
       >
         {(field) => (
@@ -112,8 +116,11 @@ export function SignUpPage() {
 
       <FormField
         id="password"
-        label="Password"
-        hint={`At least ${PASSWORD_MIN_LENGTH} characters, with a letter, a number and a special character.`}
+        label={t('Password')}
+        hint={t(
+          'At least {{count}} characters, with a letter, a number and a special character.',
+          { count: PASSWORD_MIN_LENGTH },
+        )}
         error={errors.password?.message}
       >
         {(field) => (
@@ -127,17 +134,20 @@ export function SignUpPage() {
 
       <ConsentField control={control} error={errors.consent?.message} />
 
-      <SubmitButton isSubmitting={isSubmitting} busyLabel="Creating account…">
-        Create account
+      <SubmitButton
+        isSubmitting={isSubmitting}
+        busyLabel={t('Creating account…')}
+      >
+        {t('Create account')}
       </SubmitButton>
 
       <p className="text-center text-sm text-muted-foreground">
-        Already have an account?{' '}
+        {t('Already have an account?')}{' '}
         <Link
           to="/login"
           className="font-bold text-foreground underline underline-offset-2"
         >
-          Log in
+          {t('Log in')}
         </Link>
       </p>
     </form>

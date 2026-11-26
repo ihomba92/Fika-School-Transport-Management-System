@@ -72,19 +72,20 @@ export function nearestStop(route, position) {
 
 // Every way the group could be placed, best first: for each route, its
 // nearest stop and each bus the schedule puts on that route, with the free
-// seats on each run the group needs. An option fits when the bus has a
-// seat for every student on every run they ride.
-//   buses     [{ id, number, seats, load: { morning, evening }, days }]
-//             the buses on the route this week; `days` = mornings on it
-//   needs     { morning: n, evening: n } students per run in the group
+// seats on each trip the group rides. An option fits when the bus has a
+// seat for every student on every trip they ride.
+//   buses     [{ id, number, seats, load: { tripId: n }, days }]
+//             the buses on the route this week; `days` = days on it
+//   needs     { tripId: n } students per trip time in the group
 export function placementOptions(group, routes, busesOnRoute, needs) {
+  const trips = Object.keys(needs)
   const options = routes.flatMap((route) => {
     const { stop, km } = nearestStop(route, group.centre)
     return busesOnRoute(route.id).map((bus) => {
-      const free = {
-        morning: bus.seats - bus.load.morning,
-        evening: bus.seats - bus.load.evening,
-      }
+      const load = (trip) => bus.load[trip] ?? 0
+      const free = Object.fromEntries(
+        trips.map((trip) => [trip, bus.seats - load(trip)]),
+      )
       return {
         route: { id: route.id, name: route.name },
         bus: { id: bus.id, number: bus.number, seats: bus.seats },
@@ -92,11 +93,10 @@ export function placementOptions(group, routes, busesOnRoute, needs) {
         distanceKm: km,
         days: bus.days,
         free,
-        seatsAfter: {
-          morning: bus.load.morning + needs.morning,
-          evening: bus.load.evening + needs.evening,
-        },
-        fits: free.morning >= needs.morning && free.evening >= needs.evening,
+        seatsAfter: Object.fromEntries(
+          trips.map((trip) => [trip, load(trip) + needs[trip]]),
+        ),
+        fits: trips.every((trip) => free[trip] >= needs[trip]),
       }
     })
   })
@@ -107,8 +107,14 @@ export function placementOptions(group, routes, busesOnRoute, needs) {
       Number(b.fits) - Number(a.fits) ||
       a.distanceKm - b.distanceKm ||
       b.days - a.days ||
-      b.free.morning - a.free.morning,
+      fewestFree(b.free) - fewestFree(a.free),
   )
+}
+
+// The free seats on the group's fullest trip.
+export function fewestFree(free) {
+  const counts = Object.values(free)
+  return counts.length ? Math.min(...counts) : 0
 }
 
 function average(numbers) {

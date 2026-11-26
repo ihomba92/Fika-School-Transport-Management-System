@@ -14,15 +14,15 @@ const selectClass =
 // including the one running now (a driver can be absent, a bus can break
 // down). It is checked as the admin types, with the same rules the service
 // uses before saving (checkShift in lib/shifts.js).
-//   shiftName  "Tuesday morning", for messages
+//   shiftName  "Tuesday senior pickup", for messages
 export function ShiftTable({ shift, data, shiftName, onSaved }) {
-  const { date, run, rows: savedRows, isPast, isRunning } = shift
+  const { date, trip, rows: savedRows, isPast, isRunning } = shift
   const { buses, drivers, routes, students } = data
   const [rows, setRows] = useState(savedRows)
   const [isSaving, setIsSaving] = useState(false)
   const [isCopying, setIsCopying] = useState(false)
 
-  const check = checkShift({ rows, run, buses, drivers, routes, students })
+  const check = checkShift({ rows, trip, buses, drivers, routes, students })
   const hasErrors = Object.keys(check.errors).length > 0
   const isChanged = rows.some(
     (row, index) =>
@@ -50,8 +50,8 @@ export function ShiftTable({ shift, data, shiftName, onSaved }) {
   async function save() {
     setIsSaving(true)
     try {
-      await saveShift(date, run, rows)
-      toast.success(`${shiftName} shift saved`, {
+      await saveShift(date, trip.id, rows)
+      toast.success(`${shiftName} saved`, {
         description: isRunning
           ? "Parents' and drivers' screens show the change when they next load."
           : undefined,
@@ -67,13 +67,15 @@ export function ShiftTable({ shift, data, shiftName, onSaved }) {
   async function copy() {
     setIsCopying(true)
     try {
-      const days = await copyShiftToRestOfWeek(date, run)
+      const days = await copyShiftToRestOfWeek(date, trip.id)
       toast.success(
         days.length
           ? `Copied to the rest of the week`
           : 'No later days this week to copy to',
         {
-          description: days.length ? `${days.length} more ${run}s` : undefined,
+          description: days.length
+            ? `The ${trip.name.toLowerCase()} on ${days.length} more ${days.length === 1 ? 'day' : 'days'}`
+            : undefined,
         },
       )
       onSaved()
@@ -116,7 +118,7 @@ export function ShiftTable({ shift, data, shiftName, onSaved }) {
       <ul className="flex flex-col gap-2">
         {rows.map((row) => {
           const bus = buses.find((b) => b.id === row.busId)
-          const riders = busStudents(students, bus.id, run).length
+          const riders = busStudents(students, bus.id, trip).length
           const error = check.errors[bus.id]
           const notes = check.rowNotes[bus.id] ?? []
           return (
@@ -216,7 +218,8 @@ export function ShiftTable({ shift, data, shiftName, onSaved }) {
       {!isPast && (
         <div className="flex flex-col gap-3 border-t pt-5 sm:flex-row sm:items-center sm:justify-end">
           <p className="text-xs text-muted-foreground sm:mr-auto sm:max-w-xs">
-            Copying replaces the {run} shifts on the later days of this week.
+            Copying replaces the {trip.name.toLowerCase()} shifts on the later
+            days of this week.
           </p>
           <button
             type="button"

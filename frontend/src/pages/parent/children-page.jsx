@@ -5,8 +5,10 @@ import { AddChildLink } from '@/components/parent/add-child-link'
 import { ChildCard } from '@/components/parent/child-card'
 import { useServiceData } from '@/hooks/use-service-data'
 import { getFamily } from '@/services/parent-service'
+import { useTranslation } from 'react-i18next'
 
 export function ParentChildrenPage() {
+  const { t } = useTranslation()
   const family = useServiceData(getFamily)
 
   if (family.status === 'loading') return <PageLoading />
@@ -18,9 +20,11 @@ export function ParentChildrenPage() {
     <div className="flex flex-col gap-6">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <PageHeader
-          eyebrow="My family"
-          title="Children"
-          description="Each child's plan and stops. You can change a plan or location at most once a month."
+          eyebrow={t('My family')}
+          title={t('Children')}
+          description={t(
+            "Each child's plan and stops. You can change a plan or location at most once a month.",
+          )}
         />
         <AddChildLink />
       </div>

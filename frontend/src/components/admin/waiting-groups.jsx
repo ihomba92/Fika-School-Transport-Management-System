@@ -10,9 +10,9 @@ import {
   optionNotes,
 } from './waiting-group-text'
 
-// "Students waiting for a bus" on Routes & assignment (FR-3.3 to FR-3.6):
-// one card per group of nearby homes, with the suggested route, bus and
-// stop. The admin approves it, picks another option, or dismisses it.
+// "Accepted students who need a route" on Routes & assignment (FR-3.3 to
+// FR-3.6): one card per group of nearby homes, with the suggested route,
+// bus and stop. New applications are accepted first, on their own screen. The admin approves it, picks another option, or dismisses it.
 // Nothing changes until they approve.
 export function WaitingGroups({ data, onChanged }) {
   const { groups, waitingCount, dismissedCount } = data
@@ -25,7 +25,8 @@ export function WaitingGroups({ data, onChanged }) {
     >
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h2 id="waiting-title" className="font-heading text-lg font-bold">
-          {waitingCount} students waiting for a bus
+          {waitingCount} accepted{' '}
+          {waitingCount === 1 ? 'student needs' : 'students need'} a route
         </h2>
         {groups.length > 0 && (
           <span className="rounded-full bg-primary px-3 py-1 text-xs font-bold text-primary-foreground">
@@ -43,7 +44,7 @@ export function WaitingGroups({ data, onChanged }) {
       <p className="text-xs text-muted-foreground">
         Suggestions change nothing until you approve them.
         {dismissedCount > 0 &&
-          ` ${dismissedCount} dismissed: those students are still waiting.`}
+          ` ${dismissedCount} dismissed: those students still need a route.`}
       </p>
     </section>
   )
@@ -83,7 +84,7 @@ function GroupCard({ group, onChanged }) {
     setBusy('dismiss')
     await dismissGroup(group.id)
     toast(`Suggestion for ${group.area} dismissed`, {
-      description: 'The students are still waiting.',
+      description: 'The students still need a route.',
     })
     onChanged()
   }
@@ -113,8 +114,8 @@ function GroupCard({ group, onChanged }) {
             aria-hidden="true"
           />
           <span>
-            No bus on a route this week has {group.needs.morning} free seats.
-            Put a free bus on a nearby route in the{' '}
+            No bus on a route this week has a seat for all of them on every trip
+            they ride. Put a free bus on a nearby route in the{' '}
             <Link to="/admin/schedule" className="underline">
               schedule
             </Link>

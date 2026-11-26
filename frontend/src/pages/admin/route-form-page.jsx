@@ -205,10 +205,12 @@ function RouteForm({ routeId, initial }) {
               </button>
             </div>
             <p className="text-sm text-muted-foreground">
-              In driving order for the morning. A stop where students are picked
-              up can't be removed. Recalculate stop order suggests a shorter
-              order by distance, keeping the start first and the route's current
-              pace.
+              In driving order for a pickup. The times set the gaps between
+              stops: each pickup time in the schedule starts the route at its
+              own time, and drop-offs run the stops in reverse. A stop where
+              students are picked up can't be removed. Recalculate stop order
+              suggests a shorter order by distance, keeping the start first and
+              the route's current pace.
             </p>
             {errors.stops?.root && (
               <p className="text-sm font-medium text-danger">

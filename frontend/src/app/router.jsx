@@ -109,6 +109,20 @@ export const router = createBrowserRouter([
         ),
       },
       {
+        path: 'schedule/trip-times',
+        lazy: lazyPage(
+          () => import('@/pages/admin/trip-times-page'),
+          'AdminTripTimesPage',
+        ),
+      },
+      {
+        path: 'applications',
+        lazy: lazyPage(
+          () => import('@/pages/admin/applications-page'),
+          'AdminApplicationsPage',
+        ),
+      },
+      {
         path: 'routes/new',
         lazy: lazyPage(
           () => import('@/pages/admin/route-form-page'),

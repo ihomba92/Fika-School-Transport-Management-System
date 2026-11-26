@@ -1,19 +1,18 @@
 import { Moon, Sun } from 'lucide-react'
 
+// What differs between a pickup (morning) and a drop-off (evening). Each
+// trip's own name ("Senior pickup") comes from the school's trip times.
+// The labels are English keys; screens show them with t().
 export const TRIP_KINDS = {
   morning: {
-    name: 'Morning pickup',
     icon: Sun,
     lastStop: 'At school',
     markLabel: 'Picked up',
-    doneVerb: 'picked up',
   },
   evening: {
-    name: 'Evening drop-off',
     icon: Moon,
     lastStop: 'Back at depot',
     markLabel: 'Dropped off',
-    doneVerb: 'dropped off',
   },
 }
 

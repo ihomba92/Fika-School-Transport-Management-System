@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router'
 import { toast } from 'sonner'
 import { useAuth } from '@/auth/auth-context'
 import { Avatar } from '@/components/common/avatar'
+import { useTranslation } from 'react-i18next'
 
 // The signed-in person's name in the top bar. Opens a menu with Log out.
 // Radix handles the hard parts of a menu: keyboard arrows, Escape to close,
@@ -11,10 +12,11 @@ import { Avatar } from '@/components/common/avatar'
 export function UserMenu({ roleLabel }) {
   const { user, logOut } = useAuth()
   const navigate = useNavigate()
+  const { t } = useTranslation()
 
   function handleLogOut() {
     logOut()
-    toast.success('You are logged out')
+    toast.success(t('You are logged out'))
     navigate('/login', { replace: true })
   }
 
@@ -24,13 +26,15 @@ export function UserMenu({ roleLabel }) {
         <Avatar name={user.name} className="bg-sidebar text-primary" />
         <span className="hidden flex-col items-start leading-tight md:flex">
           <span className="text-sm font-bold">{user.name}</span>
-          <span className="text-xs text-muted-foreground">{roleLabel}</span>
+          <span className="text-xs text-muted-foreground">{t(roleLabel)}</span>
         </span>
         <ChevronDown
           className="hidden size-4 text-muted-foreground md:block"
           aria-hidden="true"
         />
-        <span className="sr-only md:hidden">Account menu for {user.name}</span>
+        <span className="sr-only md:hidden">
+          {t('Account menu for {{name}}', { name: user.name })}
+        </span>
       </DropdownMenu.Trigger>
 
       <DropdownMenu.Portal>
@@ -51,7 +55,7 @@ export function UserMenu({ roleLabel }) {
             className="flex cursor-pointer items-center gap-2 rounded-xl px-3 py-2.5 text-sm font-medium outline-none data-highlighted:bg-muted"
           >
             <LogOut className="size-4" aria-hidden="true" />
-            Log out
+            {t('Log out')}
           </DropdownMenu.Item>
         </DropdownMenu.Content>
       </DropdownMenu.Portal>

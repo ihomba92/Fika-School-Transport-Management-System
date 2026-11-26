@@ -30,7 +30,8 @@ export function AdminDashboardPage() {
   if (overview.status === 'error')
     return <LoadError onRetry={overview.reload} />
 
-  const { stats, attention, term } = overview.data
+  const { stats, attention, term, trip } = overview.data
+  const isPickup = trip?.run !== 'evening'
   // The live list refreshes every 10 s; until it first arrives, use the
   // buses that came with the overview.
   const buses = live?.buses ?? overview.data.buses
@@ -42,14 +43,16 @@ export function AdminDashboardPage() {
         <div className="flex min-w-0 flex-[1_1_420px] flex-col gap-3">
           <p className="flex flex-wrap items-center gap-2 font-mono text-[11px] font-semibold tracking-[0.08em] uppercase">
             <span className="rounded-full bg-sidebar px-3 py-1 text-primary">
-              Morning pickup · live
+              {trip ? `${trip.name} · ${trip.time}` : 'No trips today'}
             </span>
             {formatLongDate(now)} · {formatTime(now)}
           </p>
           <h1 className="font-heading text-3xl font-extrabold tracking-tight sm:text-4xl">
             {greeting(now)}, {firstName(user.name)}
           </h1>
-          <p className="max-w-2xl text-lg">{heroSentence(stats, counts)}</p>
+          <p className="max-w-2xl text-lg">
+            {heroSentence(stats, counts, isPickup)}
+          </p>
         </div>
         <p className="flex items-center gap-3 rounded-2xl bg-sidebar px-4 py-3 text-sm text-sidebar-foreground">
           <Wallet className="size-5 text-primary" aria-hidden="true" />
@@ -73,12 +76,12 @@ export function AdminDashboardPage() {
           note={`${counts['on-time']} on time · ${counts.late} late · ${counts['signal-lost']} signal lost · ${counts.arrived} arrived`}
         />
         <StatCard
-          label="Picked up"
+          label={isPickup ? 'Picked up' : 'Dropped off'}
           icon={Check}
-          value={stats.pickedUp}
+          value={stats.done}
           unit={`of ${stats.riding} riding`}
-          share={stats.pickedUp / stats.riding}
-          note={`${stats.riding - stats.pickedUp} students still to collect this morning`}
+          share={stats.riding ? stats.done / stats.riding : 0}
+          note={`${stats.riding - stats.done} students still to ${isPickup ? 'collect' : 'take home'} on this trip`}
         />
         <StatCard
           label="Fees collected"
@@ -120,7 +123,7 @@ export function AdminDashboardPage() {
             </div>
             <FleetMap buses={buses} className="h-72 sm:h-80" />
           </section>
-          <TripsTable buses={buses} />
+          <TripsTable buses={buses} trip={trip} />
         </div>
         <AttentionList items={attention} />
       </div>
@@ -134,11 +137,11 @@ function countStatuses(buses) {
   return counts
 }
 
-function heroSentence(stats, counts) {
+function heroSentence(stats, counts, isPickup) {
   const lost = counts['signal-lost']
   const signal =
     lost === 0
       ? ' Every bus is sending its position.'
       : ` ${lost === 1 ? 'One bus has' : `${lost} buses have`} lost signal and ${lost === 1 ? 'needs' : 'need'} a call.`
-  return `${stats.busesRunning} buses are running and ${stats.pickedUp} of ${stats.riding} students have been picked up.${signal}`
+  return `${stats.busesRunning} buses are running and ${stats.done} of ${stats.riding} students have been ${isPickup ? 'picked up' : 'dropped off'}.${signal}`
 }

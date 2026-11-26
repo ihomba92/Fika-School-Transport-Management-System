@@ -15,10 +15,12 @@ import {
   getNotifications,
   markAllNotificationsRead,
 } from '@/services/parent-service'
+import { useTranslation } from 'react-i18next'
 
 // The in-app list of everything Fika has told this parent (FR-7.1).
 // Push (Firebase) and email (Brevo) copies come with the back end.
 export function ParentNotificationsPage() {
+  const { t } = useTranslation()
   const notifications = useServiceData(getNotifications)
   const now = useClock(60_000)
   const [isMarking, setIsMarking] = useState(false)
@@ -35,7 +37,7 @@ export function ParentNotificationsPage() {
     setIsMarking(true)
     await markAllNotificationsRead()
     setIsMarking(false)
-    toast.success('All notifications marked as read')
+    toast.success(t('All notifications marked as read'))
     notifications.reload()
   }
 
@@ -43,12 +45,15 @@ export function ParentNotificationsPage() {
     <div className="flex max-w-3xl flex-col gap-6">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <PageHeader
-          eyebrow="Account"
-          title="Notifications"
+          eyebrow={t('Account')}
+          title={t('Notifications')}
           description={
             unread
-              ? `${unread} unread. Bus updates, payments and messages from the school.`
-              : 'Bus updates, payments and messages from the school.'
+              ? t(
+                  '{{count}} unread. Bus updates, payments and messages from the school.',
+                  { count: unread },
+                )
+              : t('Bus updates, payments and messages from the school.')
           }
         />
         {unread > 0 && (
@@ -59,14 +64,16 @@ export function ParentNotificationsPage() {
             onClick={markAllRead}
           >
             <CheckCheck aria-hidden="true" />
-            Mark all as read
+            {t('Mark all as read')}
           </Button>
         )}
       </div>
 
       <Card as="div">
         {list.length === 0 ? (
-          <p className="p-6 text-muted-foreground">No notifications yet.</p>
+          <p className="p-6 text-muted-foreground">
+            {t('No notifications yet.')}
+          </p>
         ) : (
           <ul className="flex flex-col divide-y">
             {list.map((notification) => (
@@ -80,15 +87,15 @@ export function ParentNotificationsPage() {
                 <NotificationIcon kind={notification.kind} />
                 <div className="flex min-w-0 flex-1 flex-col gap-1">
                   <p className="flex flex-wrap items-center gap-2 font-semibold">
-                    {notification.title}
+                    {t(notification.title)}
                     {!notification.read && (
                       <span className="rounded-full bg-primary px-2 py-0.5 text-[10px] font-bold text-primary-foreground uppercase">
-                        New
+                        {t('New')}
                       </span>
                     )}
                   </p>
                   <p className="text-sm text-muted-foreground">
-                    {notification.detail}
+                    {t(notification.detail)}
                   </p>
                   <time
                     dateTime={notification.at}

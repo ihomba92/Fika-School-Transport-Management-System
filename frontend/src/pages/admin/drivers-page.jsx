@@ -10,8 +10,6 @@ import { PageHeader } from '@/components/layout/page-header'
 import { useServiceData } from '@/hooks/use-service-data'
 import { getFleet } from '@/services/fleet-service'
 
-const RUN_NAMES = { morning: 'morning', evening: 'evening' }
-
 // Every bus and every driver (FR-3.1, FR-3.9). They are separate lists: who
 // drives which bus, on which route, is set for each shift on the Schedule
 // screen. Only admins add buses, create driver accounts and change drivers'
@@ -23,7 +21,8 @@ export function AdminDriversPage() {
   if (fleet.status === 'error') return <LoadError onRetry={fleet.reload} />
 
   const { buses, drivers, shift } = fleet.data
-  const runName = RUN_NAMES[shift.run]
+  // "senior pickup": the shift on now, in the cards' words.
+  const runName = shift.trip?.name.toLowerCase() ?? 'shift'
   const seats = buses.reduce((total, bus) => total + bus.seats, 0)
   const driversOn = drivers.filter((driver) => driver.now).length
 
@@ -37,7 +36,7 @@ export function AdminDriversPage() {
         />
         <div className="flex flex-wrap gap-2">
           <Link
-            to={`/admin/schedule?date=${shift.date}&run=${shift.run}`}
+            to={`/admin/schedule?date=${shift.date}${shift.trip ? `&trip=${shift.trip.id}` : ''}`}
             className="flex h-11 items-center gap-2 rounded-full border px-5 font-bold hover:bg-muted"
           >
             <CalendarDays className="size-4" aria-hidden="true" />
@@ -72,7 +71,7 @@ export function AdminDriversPage() {
           label="Drivers"
           icon={UserRound}
           value={drivers.length}
-          unit={`${driversOn} on a bus this ${runName}`}
+          unit={`${driversOn} on a bus for the ${runName}`}
         />
       </div>
 

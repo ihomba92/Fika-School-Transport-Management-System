@@ -2,10 +2,12 @@ import { Controller } from 'react-hook-form'
 import { FormField } from '@/components/auth/form-field'
 import { TextInput } from '@/components/auth/text-input'
 import { LocationPicker } from '@/components/map/location-picker'
+import { useTranslation } from 'react-i18next'
 
 // The address, map pin and directions for a pickup or drop-off point.
 // `name` is 'pickup' or 'dropoff'; the fields are stored under it.
 export function PlaceFields({ name, label, register, control, errors }) {
+  const { t } = useTranslation()
   const placeErrors = errors[name] ?? {}
   const pinErrorId = `${name}-position-error`
 
@@ -13,14 +15,14 @@ export function PlaceFields({ name, label, register, control, errors }) {
     <div className="flex flex-col gap-4">
       <FormField
         id={`${name}-address`}
-        label="Street, estate or building"
-        hint="The driver sees this, so name something they can find."
+        label={t('Street, estate or building')}
+        hint={t('The driver sees this, so name something they can find.')}
         error={placeErrors.address?.message}
       >
         {(field) => (
           <TextInput
             autoComplete="street-address"
-            placeholder="e.g. Argwings Kodhek Rd, Kilimani"
+            placeholder={t('e.g. Argwings Kodhek Rd, Kilimani')}
             {...field}
             {...register(`${name}.address`)}
           />
@@ -29,7 +31,7 @@ export function PlaceFields({ name, label, register, control, errors }) {
 
       <div className="flex flex-col gap-2">
         <span className="text-sm font-semibold" id={`${name}-map-label`}>
-          {label} on the map
+          {t('{{place}} on the map', { place: label })}
         </span>
         <Controller
           name={`${name}.position`}
@@ -52,19 +54,19 @@ export function PlaceFields({ name, label, register, control, errors }) {
         />
         {placeErrors.position && (
           <p id={pinErrorId} className="text-sm font-medium text-danger">
-            {placeErrors.position.message}
+            {t(placeErrors.position.message)}
           </p>
         )}
       </div>
 
       <FormField
         id={`${name}-landmark`}
-        label="Landmark or directions for the driver (optional)"
+        label={t('Landmark or directions for the driver (optional)')}
         error={placeErrors.landmark?.message}
       >
         {(field) => (
           <TextInput
-            placeholder="e.g. Green gate next to Yaya Centre parking exit"
+            placeholder={t('e.g. Green gate next to Yaya Centre parking exit')}
             {...field}
             {...register(`${name}.landmark`)}
           />

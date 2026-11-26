@@ -16,8 +16,10 @@ import { useFinishSignIn } from '@/hooks/use-finish-sign-in'
 import { useGoogleSignIn } from '@/hooks/use-google-sign-in'
 import { firstName } from '@/lib/format'
 import { logIn } from '@/services/auth-service'
+import { useTranslation } from 'react-i18next'
 
 export function LoginPage() {
+  const { t } = useTranslation()
   const finishSignIn = useFinishSignIn()
   const google = useGoogleSignIn()
   const [formError, setFormError] = useState(null)
@@ -31,7 +33,9 @@ export function LoginPage() {
     setFormError(null)
     try {
       const login = await logIn(values)
-      toast.success(`Welcome back, ${firstName(login.user.name)}`)
+      toast.success(
+        t('Welcome back, {{name}}', { name: firstName(login.user.name) }),
+      )
       finishSignIn(login)
     } catch (error) {
       setFormError(error.message)
@@ -45,21 +49,21 @@ export function LoginPage() {
       className="flex flex-col gap-6"
     >
       <PageHeader
-        eyebrow="Welcome back"
-        title="Log in to Fika"
-        description="Parents, drivers and school staff all log in here."
+        eyebrow={t('Welcome back')}
+        title={t('Log in to Fika')}
+        description={t('Parents, drivers and school staff all log in here.')}
       />
 
       {(formError || google.error) && (
-        <FormAlert>{formError || google.error}</FormAlert>
+        <FormAlert>{t(formError || google.error)}</FormAlert>
       )}
 
       <GoogleButton onClick={google.start} isBusy={google.isBusy}>
-        Continue with Google
+        {t('Continue with Google')}
       </GoogleButton>
-      <AuthDivider>or log in with email</AuthDivider>
+      <AuthDivider>{t('or log in with email')}</AuthDivider>
 
-      <FormField id="email" label="Email" error={errors.email?.message}>
+      <FormField id="email" label={t('Email')} error={errors.email?.message}>
         {(field) => (
           <TextInput
             type="email"
@@ -74,7 +78,7 @@ export function LoginPage() {
       <div className="flex flex-col gap-2">
         <FormField
           id="password"
-          label="Password"
+          label={t('Password')}
           error={errors.password?.message}
         >
           {(field) => (
@@ -89,25 +93,25 @@ export function LoginPage() {
           to="/forgot-password"
           className="self-end text-sm font-semibold underline-offset-2 hover:underline"
         >
-          Forgot password?
+          {t('Forgot password?')}
         </Link>
       </div>
 
-      <SubmitButton isSubmitting={isSubmitting} busyLabel="Logging in…">
-        Log in
+      <SubmitButton isSubmitting={isSubmitting} busyLabel={t('Logging in…')}>
+        {t('Log in')}
       </SubmitButton>
 
       <p className="text-center text-sm text-muted-foreground">
-        New to Fika?{' '}
+        {t('New to Fika?')}{' '}
         <Link
           to="/signup"
           className="font-bold text-foreground underline underline-offset-2"
         >
-          Create a parent account
+          {t('Create a parent account')}
         </Link>
       </p>
       <p className="rounded-xl border bg-card p-4 text-sm text-muted-foreground">
-        Drivers and staff: use the account your school created for you.
+        {t('Drivers and staff: use the account your school created for you.')}
       </p>
     </form>
   )

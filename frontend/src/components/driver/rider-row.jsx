@@ -3,11 +3,15 @@ import { PersonPhoto } from '@/components/common/person-photo'
 import { formatPhone, formatTime } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import { TRIP_KINDS } from './trip-names'
+import { useTranslation } from 'react-i18next'
 
 // One student at the current stop, with large buttons for a driver's thumb:
-// Picked up (or Dropped off), Absent, and a call button for the guardian.
-// Once marked, the row shows the result and an Undo for a mistaken tap.
+// Picked up and Absent on a pickup; only Dropped off on a drop-off, because
+// every child on the bus gets off (who isn't on the bus was settled at the
+// boarding check). A call button reaches the guardian. Once marked, the
+// row shows the result and an Undo for a mistaken tap.
 export function RiderRow({ rider, kind, doneMark, isSaving, onMark }) {
+  const { t } = useTranslation()
   const { markLabel } = TRIP_KINDS[kind]
   const mark = rider.mark?.mark
 
@@ -28,14 +32,20 @@ export function RiderRow({ rider, kind, doneMark, isSaving, onMark }) {
       <div className="flex min-w-0 flex-1 flex-col">
         <span className="truncate font-semibold">{rider.name}</span>
         <span className="text-sm text-muted-foreground">
-          {rider.grade} · Guardian: {rider.guardian.name}
+          {t('{{grade}} · Guardian: {{name}}', {
+            grade: t(rider.grade),
+            name: rider.guardian.name,
+          })}
         </span>
       </div>
 
       <a
         href={`tel:${rider.guardian.phone}`}
-        aria-label={`Call ${rider.guardian.name}, ${formatPhone(rider.guardian.phone)}`}
-        title={`Call ${rider.guardian.name}`}
+        aria-label={t('Call {{name}}, {{phone}}', {
+          name: rider.guardian.name,
+          phone: formatPhone(rider.guardian.phone),
+        })}
+        title={t('Call {{name}}', { name: rider.guardian.name })}
         className="grid size-12 shrink-0 place-items-center rounded-full border hover:bg-muted"
       >
         <Phone className="size-5" aria-hidden="true" />
@@ -59,15 +69,15 @@ export function RiderRow({ rider, kind, doneMark, isSaving, onMark }) {
               ) : (
                 <X className="size-4" aria-hidden="true" />
               )}
-              {mark === doneMark ? markLabel : 'Absent'}
+              {mark === doneMark ? t(markLabel) : t('Absent')}
               {rider.mark.at && ` ${formatTime(new Date(rider.mark.at))}`}
             </span>
             <button
               type="button"
               onClick={() => onMark(null)}
               disabled={isSaving}
-              aria-label={`Undo mark for ${rider.name}`}
-              title="Undo"
+              aria-label={t('Undo mark for {{name}}', { name: rider.name })}
+              title={t('Undo')}
               className="grid size-12 place-items-center rounded-full border hover:bg-muted disabled:opacity-50"
             >
               <Undo2 className="size-4" aria-hidden="true" />
@@ -82,16 +92,18 @@ export function RiderRow({ rider, kind, doneMark, isSaving, onMark }) {
               className="flex h-12 flex-1 items-center justify-center gap-2 rounded-full bg-primary px-4 font-bold whitespace-nowrap text-primary-foreground hover:bg-primary/90 disabled:opacity-50 sm:flex-none"
             >
               <Check className="size-5" aria-hidden="true" />
-              {markLabel}
+              {t(markLabel)}
             </button>
-            <button
-              type="button"
-              onClick={() => onMark('absent')}
-              disabled={isSaving}
-              className="h-12 flex-1 rounded-full border px-4 font-semibold whitespace-nowrap hover:bg-muted disabled:opacity-50 sm:flex-none"
-            >
-              Absent
-            </button>
+            {kind === 'morning' && (
+              <button
+                type="button"
+                onClick={() => onMark('absent')}
+                disabled={isSaving}
+                className="h-12 flex-1 rounded-full border px-4 font-semibold whitespace-nowrap hover:bg-muted disabled:opacity-50 sm:flex-none"
+              >
+                {t('Absent')}
+              </button>
+            )}
           </>
         )}
       </div>

@@ -47,7 +47,7 @@ describe('optionNotes', () => {
     ).toEqual([
       'Bus 06 will be at 32 of 33 seats after this.',
       'The nearest stop, Ruaka market, is 2.1 km from their homes. You may want to add a stop in Edit route.',
-      'Bus 06 is on the Ruaka route on 2 of 5 mornings this week.',
+      'Bus 06 is on the Ruaka route on 2 of 5 days this week.',
     ])
   })
 })

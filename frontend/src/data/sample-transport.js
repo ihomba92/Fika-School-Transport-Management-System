@@ -4,9 +4,10 @@
 // routing module.
 //
 // Routes, buses and drivers are separate records with no standing links.
-// For every shift (one run on one day) the admin chooses, for each bus, its
+// For every shift (one trip time on one day) the admin chooses, for each bus, its
 // driver and its route (FR-3.9). These are the parts the parent and driver
 // screens use; the admin's whole school is in sample-fleet.js.
+import { SAMPLE_TRIP_TIMES } from './trip-times'
 
 export const DRIVERS = {
   'driver-03': {
@@ -131,24 +132,14 @@ export const ROUTES = {
 }
 
 // The sample day's shifts for Bus 03, as the admin scheduled them: Peter
-// drives it on the Kilimani route, morning and evening. Each shift with a
-// route is one run (a trip).
+// drives it on the Kilimani route at every trip time (data/trip-times.js).
+// Each shift with a route is one run (a trip).
 export const SAMPLE_DATE = '2026-10-13'
-export const SHIFTS = [
-  {
-    id: 'trip-03-am',
-    date: SAMPLE_DATE,
-    run: 'morning',
-    busId: 'bus-03',
-    driverId: 'driver-03',
-    routeId: 'route-kilimani',
-  },
-  {
-    id: 'trip-03-pm',
-    date: SAMPLE_DATE,
-    run: 'evening',
-    busId: 'bus-03',
-    driverId: 'driver-03',
-    routeId: 'route-kilimani',
-  },
-]
+export const SHIFTS = SAMPLE_TRIP_TIMES.map((trip) => ({
+  id: `bus-03-${trip.id}`,
+  date: SAMPLE_DATE,
+  tripId: trip.id,
+  busId: 'bus-03',
+  driverId: 'driver-03',
+  routeId: 'route-kilimani',
+}))

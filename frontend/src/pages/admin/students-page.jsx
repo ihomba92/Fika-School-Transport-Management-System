@@ -1,10 +1,10 @@
 import { useCallback, useState } from 'react'
 import {
   AlertTriangle,
-  Bus,
   Check,
   ChevronRight,
   Clock,
+  Inbox,
   Download,
   Search,
 } from 'lucide-react'
@@ -86,7 +86,7 @@ export function AdminStudentsPage() {
         <PageHeader
           eyebrow="People"
           title="Students"
-          description="Parents add their children and set pickup and drop-off points. You assign buses."
+          description="Accepted students: on a route, or waiting for one. Children their parents add start in New applications; once accepted they appear here."
         />
         <Button
           variant="outline"
@@ -100,24 +100,36 @@ export function AdminStudentsPage() {
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard
-          label="Assigned"
+          label="On a route"
           icon={Check}
-          value={counts.assigned}
-          unit={`of ${total} · ${Math.round((counts.assigned / total) * 100)}%`}
-          share={counts.assigned / total}
+          value={counts.onRoute}
+          unit={`of ${total} · ${total ? Math.round((counts.onRoute / total) * 100) : 0}%`}
+          share={total ? counts.onRoute / total : 0}
         />
         <StatCard
-          label="Waiting for a bus"
+          label="Accepted, need a route"
           icon={Clock}
-          value={counts.waiting}
+          value={counts.needsRoute}
           unit="students"
-          note="Open one to assign a bus"
+          note={
+            <Link to="/admin/routes" className="underline underline-offset-4">
+              Place them in Routes & assignment
+            </Link>
+          }
         />
         <StatCard
-          label="Plans"
-          icon={Bus}
-          value={`${counts.plans.both} · ${counts.plans.morning} · ${counts.plans.evening}`}
-          note="Both ways · morning only · evening only"
+          label="New applications"
+          icon={Inbox}
+          value={counts.applications}
+          unit="not students yet"
+          note={
+            <Link
+              to="/admin/applications"
+              className="underline underline-offset-4"
+            >
+              Review applications
+            </Link>
+          }
         />
         <StatCard
           label="Behind on fees"
@@ -179,7 +191,7 @@ export function AdminStudentsPage() {
           onChange={(v) => setFilter('bus', v)}
         >
           <option value={ALL}>All buses</option>
-          <option value="waiting">Waiting for a bus</option>
+          <option value="needs-route">Needs a route</option>
           {buses.map((bus) => (
             <option key={bus.id} value={bus.id}>
               {bus.number}
@@ -214,10 +226,10 @@ export function AdminStudentsPage() {
                   Plan
                 </th>
                 <th scope="col" className="px-3 py-3 font-semibold">
-                  Morning bus
+                  Pickup bus
                 </th>
                 <th scope="col" className="px-3 py-3 font-semibold">
-                  Evening bus
+                  Drop-off bus
                 </th>
                 <th scope="col" className="px-3 py-3 font-semibold">
                   Pickup point
@@ -364,7 +376,7 @@ function BusCell({ student, run }) {
   if (!bus) {
     return (
       <StatusBadge tone="warning" dot>
-        Waiting
+        No route yet
       </StatusBadge>
     )
   }

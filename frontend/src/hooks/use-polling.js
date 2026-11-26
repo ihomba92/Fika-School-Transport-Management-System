@@ -4,7 +4,8 @@ import { useCallback, useEffect, useState } from 'react'
 // by polling every 10–15 s). It pauses while the tab is hidden, which saves the
 // phone's battery and data, and asks again as soon as the tab is back.
 // `refresh()` asks straight away, for example right after the user changes
-// something, instead of waiting up to 10 seconds.
+// something, instead of waiting up to 10 seconds. With `load` null it does
+// nothing (a screen that doesn't need this data right now).
 export function usePolling(load, intervalMs) {
   // `isLoaded` tells "no data yet" apart from an answer of null.
   const [state, setState] = useState({
@@ -16,6 +17,7 @@ export function usePolling(load, intervalMs) {
   const [version, setVersion] = useState(0)
 
   useEffect(() => {
+    if (!load) return
     let isCurrent = true
 
     function poll() {

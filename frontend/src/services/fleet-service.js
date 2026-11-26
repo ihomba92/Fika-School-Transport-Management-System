@@ -6,32 +6,36 @@ import { nextBusNumber, samePlate } from '@/lib/fleet'
 import { OWN_BUS_SIZE, groupByArea, placementOptions } from '@/lib/grouping'
 import { freeBusSuggestion, routeFit } from '@/lib/route-fit'
 import {
-  RUNS,
   busStudents,
   checkShift,
   copyShift,
-  daysOnRoute,
   isPastShift,
+  runStops,
   schoolWeek,
   shiftId,
   shiftRows,
 } from '@/lib/shifts'
+import { checkTripTimes, gradeIndex } from '@/lib/trip-times'
 import {
   AdminServiceError,
+  allTrips,
   busLoad,
   currentShift,
   findBus,
   findDriver,
   findRoute,
+  findTrip,
   routeLoad,
   shiftView,
   store,
+  studentTrips,
 } from './admin-store'
 import { simulateNetwork } from './mock-network'
 
 // Stand-in for the Flask API's buses, drivers, routes and schedule (FR-3.1,
 // FR-3.8 to FR-3.11). Buses, drivers and routes are separate lists; the
-// schedule puts them together, one shift (one run on one day) at a time.
+// schedule puts them together, one shift (one trip time on one day) at a
+// time. The trip times themselves are set here too.
 
 export { AdminServiceError }
 
@@ -43,7 +47,8 @@ export async function getFleet() {
   const shift = currentShift()
   const views = shift.rows.map(shiftView)
   return {
-    shift: { date: shift.date, run: shift.run },
+    shift: { date: shift.date, trip: shift.trip },
+    trips: allTrips(),
     buses: store.buses.map((bus) => {
       const row = views.find((r) => r.busId === bus.id)
       return {
@@ -107,14 +112,14 @@ export async function createDriver(values) {
 // ── Schedule ─────────────────────────────────────────────────────────────
 
 // One shift with a row for every bus: the saved row, or an empty one.
-function rowsFor(date, run) {
-  const saved = shiftRows(store.shifts, date, run)
+function rowsFor(date, tripId) {
+  const saved = shiftRows(store.shifts, date, tripId)
   return store.buses.map(
     (bus) =>
       saved.find((row) => row.busId === bus.id) ?? {
-        id: shiftId(date, run, bus.id),
+        id: shiftId(date, tripId, bus.id),
         date,
-        run,
+        tripId,
         busId: bus.id,
         driverId: null,
         routeId: null,
@@ -122,20 +127,27 @@ function rowsFor(date, run) {
   )
 }
 
-// FR-3.11: a school week of shifts, morning and evening, with everything
-// the Schedule screen needs to check a shift before saving it.
+// FR-3.11: a school week of shifts, one per trip time per day, with
+// everything the Schedule screen needs to check a shift before saving it.
 export async function getSchedule(weekOf) {
   await simulateNetwork(250)
   const now = sampleNow()
   const week = schoolWeek(weekOf ?? toDateKey(now))
+  const trips = allTrips()
   return {
     week,
     today: toDateKey(now),
     current: currentShift(now),
-    shifts: week.flatMap((date) => RUNS.flatMap((run) => rowsFor(date, run))),
+    trips,
+    shifts: week.flatMap((date) =>
+      trips.flatMap((trip) => rowsFor(date, trip.id)),
+    ),
     past: Object.fromEntries(
       week.flatMap((date) =>
-        RUNS.map((run) => [`${date}-${run}`, isPastShift(date, run, now)]),
+        trips.map((trip) => [
+          `${date}-${trip.id}`,
+          isPastShift(date, trip, store.tripTimes, now),
+        ]),
       ),
     ),
     buses: store.buses,
@@ -147,6 +159,7 @@ export async function getSchedule(weekOf) {
     routes: store.routes.map(({ id, name }) => ({ id, name })),
     students: store.students.map((s) => ({
       id: s.id,
+      grade: s.grade,
       morningRouteId: s.morningRouteId,
       morningBusId: s.morningBusId,
       eveningRouteId: s.eveningRouteId,
@@ -155,8 +168,14 @@ export async function getSchedule(weekOf) {
   }
 }
 
-function assertCanChange(date, run) {
-  if (isPastShift(date, run, sampleNow())) {
+function tripOrThrow(tripId) {
+  const trip = findTrip(tripId)
+  if (!trip) throw new AdminServiceError('We could not find that trip time.')
+  return trip
+}
+
+function assertCanChange(date, trip) {
+  if (isPastShift(date, trip, store.tripTimes, sampleNow())) {
     throw new AdminServiceError(
       'That shift has finished, so it can no longer be changed.',
     )
@@ -167,9 +186,10 @@ function assertCanChange(date, run) {
 // hasn't finished can be changed, including the one running now (a driver
 // can fall ill, a bus can break down): parents and drivers see the change
 // the next time their screen loads.
-export async function saveShift(date, run, rows) {
+export async function saveShift(date, tripId, rows) {
   await simulateNetwork()
-  assertCanChange(date, run)
+  const trip = tripOrThrow(tripId)
+  assertCanChange(date, trip)
   const clean = rows.map((row) => {
     if (!findBus(row.busId)) throw new AdminServiceError('Unknown bus.')
     if (row.driverId && !findDriver(row.driverId)) {
@@ -179,9 +199,9 @@ export async function saveShift(date, run, rows) {
       throw new AdminServiceError('Unknown route.')
     }
     return {
-      id: shiftId(date, run, row.busId),
+      id: shiftId(date, tripId, row.busId),
       date,
-      run,
+      tripId,
       busId: row.busId,
       driverId: row.driverId || null,
       routeId: row.routeId || null,
@@ -189,7 +209,7 @@ export async function saveShift(date, run, rows) {
   })
   const { errors } = checkShift({
     rows: clean,
-    run,
+    trip,
     buses: store.buses,
     drivers: store.drivers,
     routes: store.routes,
@@ -199,27 +219,96 @@ export async function saveShift(date, run, rows) {
   if (firstError) throw new AdminServiceError(firstError)
 
   store.shifts = [
-    ...store.shifts.filter((row) => !(row.date === date && row.run === run)),
+    ...store.shifts.filter(
+      (row) => !(row.date === date && row.tripId === tripId),
+    ),
     ...clean,
   ]
 }
 
-// Copies a saved shift to the same run on the later days of its week.
-export async function copyShiftToRestOfWeek(date, run) {
+// Copies a saved shift to the same trip time on the later days of its week.
+export async function copyShiftToRestOfWeek(date, tripId) {
   await simulateNetwork()
+  const trip = tripOrThrow(tripId)
   const now = sampleNow()
   const later = schoolWeek(date).filter(
-    (day) => day > date && !isPastShift(day, run, now),
+    (day) => day > date && !isPastShift(day, trip, store.tripTimes, now),
   )
   store.shifts = copyShift(
     [
-      ...store.shifts.filter((r) => !(r.date === date && r.run === run)),
-      ...rowsFor(date, run),
+      ...store.shifts.filter((r) => !(r.date === date && r.tripId === tripId)),
+      ...rowsFor(date, tripId),
     ],
-    { date, run },
+    { date, tripId },
     later,
   )
   return later
+}
+
+// ── Trip times ───────────────────────────────────────────────────────────
+
+// The school's trip times, pickups first, with how many students ride each
+// and any grades left without a pickup or drop-off.
+export async function getTripTimes() {
+  await simulateNetwork(200)
+  const trips = allTrips()
+  return {
+    trips: trips.map((trip) => ({
+      ...trip,
+      studentCount: store.students.filter(
+        (s) =>
+          s.stage === 'on-route' && studentTrips(s)[trip.run]?.id === trip.id,
+      ).length,
+    })),
+    notes: checkTripTimes(trips).notes,
+  }
+}
+
+// Adds a trip time (`tripId` null) or changes one. `values` come from the
+// trip time form: { name, run, time, firstGrade, lastGrade }. A grade can
+// have only one pickup and one drop-off, so each child's trip is clear.
+// A new trip time starts with no shifts: the admin plans its buses in the
+// schedule.
+export async function saveTripTime(tripId, values) {
+  await simulateNetwork()
+  const existing = tripId ? tripOrThrow(tripId) : null
+  if (gradeIndex(values.firstGrade) > gradeIndex(values.lastGrade)) {
+    throw new AdminServiceError('The first grade must come before the last.')
+  }
+  const trip = {
+    id: existing?.id ?? `trip-${crypto.randomUUID().slice(0, 8)}`,
+    name: values.name,
+    run: values.run,
+    time: values.time,
+    firstGrade: values.firstGrade,
+    lastGrade: values.lastGrade,
+  }
+  const trips = existing
+    ? store.tripTimes.map((t) => (t.id === trip.id ? trip : t))
+    : [...store.tripTimes, trip]
+  const error = checkTripTimes(trips).errors[trip.id]
+  if (error) throw new AdminServiceError(error)
+  // A trip time keeps its run: its shifts' buses and students depend on it.
+  if (existing && existing.run !== trip.run) {
+    throw new AdminServiceError(
+      'A pickup can’t become a drop-off. Add a new trip time instead.',
+    )
+  }
+  store.tripTimes = trips
+  return trip
+}
+
+// Removes a trip time and its shifts from today on. Children of its grades
+// have no bus on that run until another trip time covers them. (The real
+// API keeps past shifts as records.)
+export async function deleteTripTime(tripId) {
+  await simulateNetwork()
+  const trip = tripOrThrow(tripId)
+  const today = toDateKey(sampleNow())
+  store.tripTimes = store.tripTimes.filter((t) => t.id !== trip.id)
+  store.shifts = store.shifts.filter(
+    (row) => row.tripId !== trip.id || row.date < today,
+  )
 }
 
 // ── Routes ───────────────────────────────────────────────────────────────
@@ -233,19 +322,25 @@ export async function getRoutes() {
   const views = shift.rows.map(shiftView)
   const freeBuses = views.filter((row) => !row.routeId).map((row) => row.bus)
 
+  const { trip } = shift
+  const timesTrip =
+    trip.run === 'morning'
+      ? trip
+      : (allTrips().find((t) => t.run === 'morning') ?? trip)
   const routes = store.routes.map((route) => {
     const onRoute = views
       .filter((row) => row.routeId === route.id)
       .map((row) => ({
         bus: row.bus,
         driver: row.driver,
-        students: busStudents(store.students, row.busId, shift.run).length,
+        students: busStudents(store.students, row.busId, trip).length,
       }))
     const seats = onRoute.length
       ? onRoute.reduce((total, r) => total + r.bus.seats, 0)
       : null
     const load = routeLoad(route.id)
-    const fit = routeFit(load, seats)
+    // The seats this shift needs: the route's students on this trip.
+    const fit = routeFit({ [trip.id]: load[trip.id] ?? 0 }, seats)
     const riders = store.students.filter((s) => s.morningRouteId === route.id)
     return {
       id: route.id,
@@ -254,8 +349,13 @@ export async function getRoutes() {
       seats,
       load,
       fit,
+      studentCount: store.students.filter(
+        (s) => s.morningRouteId === route.id || s.eveningRouteId === route.id,
+      ).length,
       suggestion: freeBusSuggestion(fit, seats, onRoute.length, freeBuses),
-      stops: route.stops.map((stop) => ({
+      // Stop times as on a pickup: this shift's if it is one, else the
+      // first pickup of the day.
+      stops: runStops(route, timesTrip).map((stop) => ({
         ...stop,
         riders: riders
           .filter((s) => s.pickup.stopId === stop.id)
@@ -264,7 +364,12 @@ export async function getRoutes() {
       withoutStop: riders.filter((s) => !s.pickup.stopId).length,
     }
   })
-  return { shift: { date: shift.date, run: shift.run }, routes, freeBuses }
+  return {
+    shift: { date: shift.date, trip },
+    timesTrip,
+    routes,
+    freeBuses,
+  }
 }
 
 const SCHOOL = {
@@ -364,26 +469,38 @@ export async function saveRoute(routeId, values) {
   return route
 }
 
-// ── Students waiting for a bus ───────────────────────────────────────────
+// ── Accepted students who need a route ───────────────────────────────────
 
 // Groups the admin dismissed; they stay waiting, with no suggestion, until
 // the page is reloaded (the real API stores this).
 const dismissedGroups = new Set()
 
 // The buses the schedule puts on a route this week, with their students per
-// run and how many mornings each is on it.
+// trip time and on how many days each is on it.
 function busesOnRouteThisWeek(routeId) {
   const week = schoolWeek(toDateKey(sampleNow()))
-  const busIds = new Set(
-    store.shifts
-      .filter((row) => week.includes(row.date) && row.routeId === routeId)
-      .map((row) => row.busId),
+  const onRoute = store.shifts.filter(
+    (row) => week.includes(row.date) && row.routeId === routeId,
   )
+  const busIds = new Set(onRoute.map((row) => row.busId))
   return [...busIds].map((busId) => ({
     ...findBus(busId),
     load: busLoad(busId),
-    days: daysOnRoute(store.shifts, week, 'morning', busId, routeId),
+    days: new Set(
+      onRoute.filter((row) => row.busId === busId).map((row) => row.date),
+    ).size,
   }))
+}
+
+// How many of `students` ride each trip time: { tripId: count }.
+function tripNeeds(students) {
+  const needs = {}
+  for (const student of students) {
+    for (const trip of Object.values(studentTrips(student))) {
+      if (trip) needs[trip.id] = (needs[trip.id] ?? 0) + 1
+    }
+  }
+  return needs
 }
 
 // "Kileleshwa, Nairobi" → "Kileleshwa", the name most of the group shares.
@@ -404,18 +521,16 @@ const groupId = (students) =>
     .toSorted()
     .join('+')
 
-// FR-3.3, FR-3.4: waiting students grouped by where they live, each group
-// with the ways it could be placed (route, bus and nearest stop), best first.
+// FR-3.3, FR-3.4: accepted students who need a route, grouped by where
+// they live, each group with the ways it could be placed (route, bus and
+// nearest stop), best first. Seats are counted per trip time.
 export async function getWaitingGroups() {
   await simulateNetwork(250)
   const waiting = store.students.filter(
-    (s) => s.isWaiting && s.pickup?.position,
+    (s) => s.stage === 'needs-route' && s.pickup?.position,
   )
   const groups = groupByArea(waiting).map((group) => {
-    const needs = {
-      morning: group.students.filter((s) => PLANS[s.plan].hasMorning).length,
-      evening: group.students.filter((s) => PLANS[s.plan].hasEvening).length,
-    }
+    const needs = tripNeeds(group.students)
     return {
       id: groupId(group.students),
       area: areaName(group.students),
@@ -442,6 +557,7 @@ export async function getWaitingGroups() {
     groups: shown,
     waitingCount: waiting.length,
     dismissedCount: groups.length - shown.length,
+    trips: allTrips(),
   }
 }
 
@@ -459,19 +575,17 @@ export async function approveGroup(studentIds, { routeId, busId, stopId }) {
   const students = studentIds.map((id) =>
     store.students.find((s) => s.id === id),
   )
-  if (students.some((s) => !s?.isWaiting)) {
+  if (students.some((s) => s?.stage !== 'needs-route')) {
     throw new AdminServiceError(
       'Some of these students already have a bus. Reload to see the latest.',
     )
   }
   const load = busLoad(bus.id)
-  for (const run of RUNS) {
-    const joining = students.filter((s) =>
-      run === 'morning' ? PLANS[s.plan].hasMorning : PLANS[s.plan].hasEvening,
-    ).length
-    if (load[run] + joining > bus.seats) {
+  for (const [tripId, joining] of Object.entries(tripNeeds(students))) {
+    const free = bus.seats - (load[tripId] ?? 0)
+    if (joining > free) {
       throw new AdminServiceError(
-        `${bus.number} has ${bus.seats - load[run]} free seats on the ${run} run, not ${joining}.`,
+        `${bus.number} has ${free} free seats on the ${findTrip(tripId).name.toLowerCase()}, not ${joining}.`,
       )
     }
   }
@@ -482,14 +596,14 @@ export async function approveGroup(studentIds, { routeId, busId, stopId }) {
     student.eveningRouteId = plan.hasEvening ? route.id : null
     student.eveningBusId = plan.hasEvening ? bus.id : null
     student.pickup = { ...student.pickup, stopId }
-    student.isWaiting = false
+    student.stage = 'on-route'
     // Fees start now, with 7 days for anything already due.
     student.joinedOn = toDateKey(sampleNow())
   }
   return { route: { id: route.id, name: route.name }, bus }
 }
 
-// FR-3.6: the admin rejects a suggestion. The students stay waiting.
+// FR-3.6: the admin rejects a suggestion. The students still need a route.
 export async function dismissGroup(id) {
   await simulateNetwork(200)
   dismissedGroups.add(id)
