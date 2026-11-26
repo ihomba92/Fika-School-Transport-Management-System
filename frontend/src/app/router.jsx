@@ -19,17 +19,11 @@ export const router = createBrowserRouter([
   },
   {
     path: 'terms',
-    lazy: async () => {
-      const { LegalPage } = await import('@/pages/public/legal-page')
-      return { Component: () => <LegalPage title="Terms of use" /> }
-    },
+    lazy: lazyPage(() => import('@/pages/public/terms-page'), 'TermsPage'),
   },
   {
     path: 'privacy',
-    lazy: async () => {
-      const { LegalPage } = await import('@/pages/public/legal-page')
-      return { Component: () => <LegalPage title="Privacy notice" /> }
-    },
+    lazy: lazyPage(() => import('@/pages/public/privacy-page'), 'PrivacyPage'),
   },
   {
     element: <AuthLayout />,

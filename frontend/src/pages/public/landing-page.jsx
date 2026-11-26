@@ -14,6 +14,7 @@ import { RouteJourney } from '@/components/public/route-journey'
 import { SiteFooter } from '@/components/public/site-footer'
 import { SiteHeader } from '@/components/public/site-header'
 import { cn } from '@/lib/utils'
+import { useHashScroll } from '@/hooks/use-hash-scroll'
 
 // The public landing page (Module 5): what Fika does for a school, how a
 // school day runs on it, and links to log in or create a parent account.
@@ -109,6 +110,7 @@ const BUTTON =
   'flex h-13 items-center justify-center px-7 text-xs font-extrabold tracking-[0.12em] uppercase transition-colors'
 
 export function LandingPage() {
+  useHashScroll()
   return (
     <div className="flex min-h-screen flex-col font-['Montserrat_Variable',sans-serif]">
       <SiteHeader />
