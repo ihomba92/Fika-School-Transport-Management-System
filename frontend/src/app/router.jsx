@@ -116,6 +116,13 @@ export const router = createBrowserRouter([
         ),
       },
       {
+        path: 'reports',
+        lazy: lazyPage(
+          () => import('@/pages/admin/reports-page'),
+          'AdminReportsPage',
+        ),
+      },
+      {
         path: 'applications',
         lazy: lazyPage(
           () => import('@/pages/admin/applications-page'),

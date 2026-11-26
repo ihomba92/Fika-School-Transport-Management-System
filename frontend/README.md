@@ -79,7 +79,7 @@ This folder is the **React front end**. It is complete and runs on its own using
 
 | Tool | Version | What it does here |
 |---|---|---|
-| [Vitest](https://vitest.dev) | 5.1 | Unit tests (180 tests in 33 files). |
+| [Vitest](https://vitest.dev) | 5.1 | Unit tests (188 tests in 35 files). |
 | [Testing Library](https://testing-library.com) + jsdom | — | Installed for component tests. |
 | [Oxlint](https://oxc.rs) | 1.90 | Linting (`npm run lint`), including React Hooks and fast-refresh rules. |
 | [Prettier](https://prettier.io) + prettier-plugin-tailwindcss | 3.10 | Formatting: no semicolons, single quotes, Tailwind classes sorted. |
@@ -168,8 +168,11 @@ frontend/
     ├── config/             Navigation menus per role, transport plans, grades
     ├── data/               Sample data for the mock services (goes with the back end)
     ├── services/           One file per area; the only place that "talks to the server"
+    │                       (admin, fleet, payments, reports, parent, driver, auth;
+    │                       admin-store and attendance-store play the database)
     ├── hooks/              Reusable logic: polling, location sharing, wake lock, clocks…
-    ├── lib/                Pure business logic with unit tests (fees, shifts, trips…)
+    ├── lib/                Pure business logic with unit tests (trip times, shifts,
+    │                       fees, grouping, trips, reports…)
     │   └── validation/     Zod schemas for every form, with tests
     ├── components/
     │   ├── ui/             shadcn/ui components
@@ -237,7 +240,7 @@ frontend/
 
 ### 8.3 Admin (transport office)
 
-Menu: **Operations** (Dashboard, Live map, Schedule, Routes & assignment) · **People** (New applications, Students, Drivers & buses) · **Finance** (Payments).
+Menu: **Operations** (Dashboard, Live map, Schedule, Routes & assignment) · **People** (New applications, Students, Drivers & buses) · **Finance** (Payments, Reports).
 
 | Screen | Address | What it does |
 |---|---|---|
@@ -255,6 +258,7 @@ Menu: **Operations** (Dashboard, Live map, Schedule, Routes & assignment) · **P
 | Add a driver | `/admin/drivers/new` | Name, email, phone, licence and a **required photo**. The driver gets a temporary password by email and must change it at first log in. Only admins create drivers or change their photos. |
 | **Payments** | `/admin/payments` | This term's fee and totals (collected, expected, overdue). **Behind on fees**: students overdue, in their 3-day grace period, flagged, or removed, with **Send reminders** and a confirmed **Remove from transport**. The latest M‑Pesa payments, and **Export statement** as a CSV. |
 | Fee settings | `/admin/payments/settings` | The school year's three terms: dates, transport fee and instalment due dates (spread evenly or set by hand). Before saving a change that would make students overdue, it shows how many and asks to confirm. Closed terms can't be edited, and terms can't overlap. |
+| **Reports** | `/admin/reports` | A month at a glance (the month is in the address, `?month=2026-09`): share of runs **on time** (within 5 minutes of plan, against a 90% target) by route and by trip time, worst first; **bus occupancy** (average and busiest trip against seats); and **fees collected** (by week, against what fell due). Every chart has its numbers as a table. **Export as PDF** prints the page (the browser saves an A4 PDF); **CSV** downloads every section. |
 
 ### 8.4 Driver
 
@@ -293,6 +297,8 @@ These live in `src/lib/` and are covered by unit tests:
 - **Placement**: accepted students are grouped by distance (within 1.5 km); a group of 15 or more is offered its own bus; a stop more than 1 km from home is flagged. Seats are checked per trip time.
 - **Attendance**: a child marked absent at pickup is absent for the rest of the day (boarding check and drop-off) unless the office marks them present; a child missing at boarding is flagged on the admin dashboard.
 - **Fees**: three terms a year; the fee is paid in instalments; one-way plans pay half; a student who joins mid-term gets 7 days before their first due date; overdue accounts get a **3-day grace period** before being flagged; removal for fees always needs confirmation.
+- **Reports**: a run is *on time* if it reaches school (or its last stop) within 5 minutes of plan; the target is 90% of runs. Occupancy is riders against seats on each trip; fees count successful M‑Pesa payments by the day they were paid.
+- **Languages and data**: parents and drivers choose English or Kiswahili; parents on Data Saver or 2G get the text-only trip view unless they turn it off.
 - **Privacy**: location is shared only between Start trip and End trip; children's photos are seen only by their parents, their driver and the office; only the office sets drivers' photos.
 
 ---
@@ -300,13 +306,14 @@ These live in `src/lib/` and are covered by unit tests:
 ## 10. Testing and code quality
 
 ```bash
-npm test          # 180 unit tests
+npm test          # 188 unit tests
 npm run lint      # Oxlint
 npm run build     # must build without errors
 ```
 
-- **Unit tests** sit next to the code they test (`*.test.js`): fees, shifts, grouping, stop order, route fit, trips, the landing animation's timeline, formatting, CSV export and every Zod schema.
-- **Browser walkthroughs** with Playwright cover each module (schedule, route editing, waiting students, payments, fee settings, parent, driver) at phone and desktop widths, in both themes.
+- **Unit tests** sit next to the code they test (`*.test.js`): trip times, shifts, fees, grouping, stop order, route fit, trips, reports, low-data detection, the landing animation's timeline, formatting (English and Kiswahili), CSV export, the text helpers behind applications, student status and reports, and every Zod schema.
+- **Translation check**: `src/i18n/i18n.test.js` fails if any parent, driver or sign-in text has no Kiswahili, or a translation drops a `{{placeholder}}`.
+- **Browser walkthroughs** with Playwright cover each module (schedule and trip times, route editing, applications and placement, payments, fee settings, reports, parent with Kiswahili and low-data mode, driver with the boarding check) at phone and desktop widths, in both themes.
 - **Conventions**: one component per file, text helpers in `.js` files (so component files export only components), `useWatch` rather than `watch` in forms, comments that explain *why*, and Prettier formatting.
 
 ---
@@ -320,6 +327,17 @@ The plan for the Flask API:
 3. Delete `src/data/` sample files, `mock-network.js` and the sample clock (`sampleNow` → `new Date()`).
 4. Connect real Google sign-in, M‑Pesa (Daraja STK push and callbacks), Firebase push notifications and Brevo email.
 5. Repeat every rule from `src/lib/` on the server: the front end's checks are for a good experience, the server's are for security.
+
+What the newer screens need from the database and API:
+
+| Feature | Tables and columns | Endpoints |
+|---|---|---|
+| Trip times | `trip_times (id, name, run, start_time, first_grade, last_grade)`; `shifts.trip_time_id` | CRUD for trip times; shifts per trip time |
+| New applications | `students.stage` (`applied`, `needs-route`, `on-route`, `declined`), `submitted_on`, `decided_on`, `decline_reason` | list, accept, decline, reopen; notify the parent |
+| Attendance and boarding | `attendance (student_id, date, at, bus_id, shift_id, marked_at, cleared_at)` | mark absent / boarded / not here; office marks present; push the *Not here* alert |
+| Languages | `users.language` (`en` / `sw`) | save the choice; send notifications, email and SMS in it |
+| Low-data mode | — | `GET /parent/trip/status` (a few hundred bytes, cached briefly in Redis) |
+| Reports | `runs (date, shift_id, bus_id, route_id, planned_at, arrived_at, riders, seats)`, written when a trip ends | `GET /reports/months`, `GET /reports/monthly?month=`, a WeasyPrint PDF, and a monthly email job |
 
 ---
 
@@ -352,7 +370,7 @@ The plan for the Flask API:
 
 - **Kiswahili for the admin screens**, and a native speaker's review of `sw.json`.
 - **Admin roles**: separate permissions for the finance office and the transport office.
-- **Reports**: monthly on-time performance, bus occupancy and fee collection, exportable as PDF.
+- **Reports from real runs**: record each run's arrival time and riders on the server, render the PDF there (WeasyPrint) and email it to the head teacher on the 1st.
 - **Driver–office messaging** for breakdowns and delays, so the office can update parents from one place.
 - **SMS** for parents with no data at all (Africa's Talking): "Bus 03 is 2 stops from your stop", opt-in.
 

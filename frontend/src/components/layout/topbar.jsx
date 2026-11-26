@@ -8,6 +8,7 @@ import { useClock } from '@/hooks/use-clock'
 import { formatLongDate, formatTime } from '@/lib/format'
 import { useTranslation } from 'react-i18next'
 import { LanguageSwitch } from '@/components/common/language-switch'
+import { cn } from '@/lib/utils'
 
 const CLOCK_TICK_MS = 15_000
 
@@ -17,12 +18,18 @@ export function Topbar({
   notificationsPath,
   canChooseLanguage,
   onOpenMenu,
+  className,
 }) {
   const now = useClock(CLOCK_TICK_MS)
   const { t } = useTranslation()
 
   return (
-    <header className="flex items-center gap-3 border-b bg-card px-4 py-3 sm:px-8">
+    <header
+      className={cn(
+        'flex items-center gap-3 border-b bg-card px-4 py-3 sm:px-8',
+        className,
+      )}
+    >
       <button
         type="button"
         onClick={onOpenMenu}
