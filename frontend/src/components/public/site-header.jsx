@@ -3,13 +3,14 @@ import { ThemeToggle } from '@/components/theme/theme-toggle'
 import { SiteBrand } from './site-brand'
 
 const SECTIONS = [
-  { href: '#how-it-works', label: 'How it works' },
-  { href: '#for-schools', label: 'For schools' },
-  { href: '#for-families', label: 'For parents' },
-  { href: '#fees', label: 'Fees & M‑Pesa' },
+  { href: '/#how-it-works', label: 'How it works' },
+  { href: '/#for-schools', label: 'For schools' },
+  { href: '/#for-families', label: 'For parents' },
+  { href: '/#fees', label: 'Fees & M‑Pesa' },
 ]
 
-// The landing page's header: the Fika name, links to the page's sections,
+// The public pages' header: the Fika name, links to the landing page's
+// sections (they work from the Terms and Privacy pages too),
 // the theme switch, log in, and a way for a school to get in touch.
 export function SiteHeader() {
   return (
@@ -41,7 +42,7 @@ export function SiteHeader() {
             Log in
           </Link>
           <a
-            href="#get-fika"
+            href="/#get-fika"
             className="hidden h-11 items-center bg-sidebar px-5 text-xs font-extrabold tracking-widest text-primary uppercase shadow-[4px_4px_0_var(--primary)] hover:bg-sidebar/90 sm:flex"
           >
             Request a demo

@@ -165,7 +165,7 @@ frontend/
     ├── app/router.jsx      Every web address, per role
     ├── auth/               JWT session (AuthProvider), RequireRole guard
     ├── i18n/               English / Kiswahili setup; locales/sw.json holds the Kiswahili
-    ├── config/             Navigation menus per role, transport plans, grades
+    ├── config/             Navigation menus per role, transport plans, grades, legal (who provides Fika)
     ├── data/               Sample data for the mock services (goes with the back end)
     ├── services/           One file per area; the only place that "talks to the server"
     │                       (admin, fleet, payments, reports, parent, driver, auth;
@@ -222,8 +222,8 @@ frontend/
 | Screen | Address | What it does |
 |---|---|---|
 | Landing page | `/` | Introduces Fika to schools and parents: a hero with the school-bus photo, facts strip, **How it works** (an animated bus drives a route from start to school and back while five steps light up in turn), features for administrators, panels for parents and drivers, privacy promises, a "Bring Fika to your school" contact box, and a footer with the builder's contact details. Links to log in and to create a parent account. |
-| Terms of use | `/terms` | Placeholder until the school's real terms are written. |
-| Privacy notice | `/privacy` | Placeholder for the privacy notice required by Kenya's Data Protection Act. |
+| Terms of use | `/terms` | The agreement for parents, drivers and staff: an *In short* summary, then accounts, applications and placement, live trips as estimates, absences, fees and M‑Pesa, fair use, availability, responsibility (consumer rights kept), closing an account, Kenyan law and contacts. |
+| Privacy notice | `/privacy` | The notice Kenya's Data Protection Act, 2019 requires: the school as data controller and Fika as processor, what is collected and why, children's data, bus location only during trips, who data is shared with, the parent's rights, how long data is kept, security and breach reporting, what Fika keeps on the phone, and complaints to the ODPC. Links such as `/privacy#rights` jump to a section. |
 | Not found | any other address | Friendly 404 with a way back. |
 
 ### 8.2 Sign-in screens (all roles)
@@ -343,11 +343,25 @@ What the newer screens need from the database and API:
 
 ## 12. Suggestions for improvement
 
+**Done since the first version of this list**
+
+| Suggestion | What was built | Where |
+|---|---|---|
+| Kiswahili as a second language | English / Kiswahili switch for parents, drivers and the sign-in screens; dates, greetings, plurals and form errors translated; a test that fails on any untranslated text | `src/i18n/`, section 7 *Languages* |
+| Low-data mode for parents | **Save data**: the trip in words instead of the map, on by itself on Data Saver or 2G; a few hundred bytes every 30 s and no map download | `use-low-data.js`, `trip-text-view.jsx`, section 7 *Low-data mode* |
+| Monthly reports | On-time performance by route and trip time, bus occupancy and fee collection, with PDF (print) and CSV export | `/admin/reports`, `lib/reports.js` |
+| Real Terms and Privacy pages | Full Terms of use and a Privacy notice written for the Data Protection Act, 2019, with a summary and contents, replacing the placeholders | `terms-page.jsx`, `privacy-page.jsx`, `legal-layout.jsx` |
+
+Also added at the school's request: **trip times** by grade (several pickups and drop-offs a day), **new applications** kept apart from students who need a route, the driver's **boarding check** at school with absences carried through the day, and no *Absent* button on drop-offs.
+
+**Still to do**
+
 **Before launch**
 
 - **Map tiles**: OpenStreetMap's free tile server isn't meant for production traffic. Switch to a provider with a key (MapTiler, Stadia, Mapbox) or self-host.
-- **Landing page photo**: the bus photo is a press photo. Get permission, or replace `src/assets/hero-buses.jpg` with a photo of the school's own buses. Serve it as WebP/AVIF with `srcset` for faster phones.
-- **Legal pages**: replace the Terms and Privacy placeholders with the school's real texts (Kenya Data Protection Act, 2019).
+- **Legal review**: have a Kenyan advocate review the Terms and the Privacy notice, and the school confirm its details in `src/data/school.js` (privacy email, address), its fee and refund rules, and the retention periods. Register the school (controller) and Fika (processor) with the ODPC if their size requires it, and sign a processing contract between them.
+- **Legal pages in Kiswahili**: the Terms and the Privacy notice are English only for now; add a Kiswahili version once the English text is final.
+- **Landing page photo**: serve `src/assets/hero-buses.jpg` as WebP/AVIF with `srcset` for faster phones.
 - **Dependencies**: run `npm audit` and update the packages behind the 7 moderate warnings.
 - **Error monitoring**: add Sentry (or similar) so crashes on parents' and drivers' phones are reported.
 
@@ -368,11 +382,11 @@ What the newer screens need from the database and API:
 
 **Product**
 
-- **Kiswahili for the admin screens**, and a native speaker's review of `sw.json`.
-- **Admin roles**: separate permissions for the finance office and the transport office.
-- **Reports from real runs**: record each run's arrival time and riders on the server, render the PDF there (WeasyPrint) and email it to the head teacher on the 1st.
-- **Driver–office messaging** for breakdowns and delays, so the office can update parents from one place.
-- **SMS** for parents with no data at all (Africa's Talking): "Bus 03 is 2 stops from your stop", opt-in.
+- **Admin roles** (next, with the back end's log-in module): separate permissions for the finance office and the transport office, a Staff screen, and an audit log.
+- **Driver–office messaging** for breakdowns and delays: one-tap *Report a problem* for drivers, a Messages inbox for the office, and *Notify parents on this bus*.
+- **Kiswahili for the admin screens**, and a native speaker's review of `sw.json` (especially M‑Pesa, fees and absence messages).
+- **Reports from real runs**: record each run's arrival time and riders on the server, render the PDF there (WeasyPrint) and email it to the head teacher on the 1st. The screen and `lib/reports.js` are ready for it.
+- **SMS** for parents with no data at all (Africa's Talking): "Bus 03 is 2 stops from your stop", opt-in, using the same status as low-data mode.
 
 ---
 
