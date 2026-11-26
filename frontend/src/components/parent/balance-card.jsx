@@ -1,12 +1,15 @@
 import { StatusBadge } from '@/components/common/status-badge'
 import { formatAmount, formatDayMonth, formatKes } from '@/lib/format'
 import { cn } from '@/lib/utils'
+import { useTranslation } from 'react-i18next'
+import { namesList } from './trip-text'
 
 // The family's balance for the term. It turns red once a deadline passes
 // unpaid (FR-6.3); there is no month-by-month board on the dashboard.
 // `familyChildren` avoids the name `children`, which React reserves for nested JSX.
 // `payAction` is the Pay balance button, shown under the balance.
 export function BalanceCard({ familyChildren, totals, payAction, className }) {
+  const { t } = useTranslation()
   const overdue = familyChildren.filter((c) => c.fees.status === 'overdue')
   const isOverdue = overdue.length > 0
   const share = totals.fee ? (totals.paid / totals.fee) * 100 : 100
@@ -25,16 +28,16 @@ export function BalanceCard({ familyChildren, totals, payAction, className }) {
           id="balance-title"
           className="font-mono text-[11px] font-semibold tracking-[0.08em] text-sidebar-foreground/60 uppercase"
         >
-          Balance
+          {t('Balance')}
         </h2>
         {isOverdue && (
           <StatusBadge tone="danger" dot>
-            Overdue
+            {t('Overdue')}
           </StatusBadge>
         )}
         {totals.balance === 0 && (
           <StatusBadge tone="success" dot>
-            Paid in full
+            {t('Paid in full')}
           </StatusBadge>
         )}
       </div>
@@ -50,20 +53,22 @@ export function BalanceCard({ familyChildren, totals, payAction, className }) {
         </span>
         {isOverdue && (
           <span className="text-sm text-sidebar-foreground/70">
-            was due {formatDayMonth(overdue[0].fees.dueDate)}
+            {t('was due {{date}}', {
+              date: formatDayMonth(overdue[0].fees.dueDate),
+            })}
           </span>
         )}
       </p>
 
       <p className="text-sm text-sidebar-foreground/80">
-        {balanceMessage(familyChildren, overdue)}
+        {balanceMessage(familyChildren, overdue, t)}
       </p>
 
       <div className="flex flex-col gap-2">
         <div
           className="h-1.5 overflow-hidden rounded-full bg-sidebar-accent"
           role="progressbar"
-          aria-label="Share of this term's fees paid"
+          aria-label={t("Share of this term's fees paid")}
           aria-valuenow={Math.round(share)}
           aria-valuemin={0}
           aria-valuemax={100}
@@ -74,8 +79,10 @@ export function BalanceCard({ familyChildren, totals, payAction, className }) {
           />
         </div>
         <span className="font-mono text-[11px] text-sidebar-foreground/60">
-          KES {formatAmount(totals.paid)} of {formatAmount(totals.fee)} paid
-          this term
+          {t('KES {{paid}} of {{fee}} paid this term', {
+            paid: formatAmount(totals.paid),
+            fee: formatAmount(totals.fee),
+          })}
         </span>
       </div>
 
@@ -84,19 +91,23 @@ export function BalanceCard({ familyChildren, totals, payAction, className }) {
   )
 }
 
-function balanceMessage(familyChildren, overdue) {
+function balanceMessage(familyChildren, overdue, t) {
   if (overdue.length === 0) {
     const due = familyChildren.find((c) => c.fees.status === 'upcoming')
     return due
-      ? `Next payment: ${formatKes(due.fees.amountDue)} for ${firstNameOf(due)} by ${formatDayMonth(due.fees.dueDate)}.`
-      : 'All your children are paid up for this term.'
+      ? t('Next payment: {{amount}} for {{name}} by {{date}}.', {
+          amount: formatKes(due.fees.amountDue),
+          name: firstNameOf(due),
+          date: formatDayMonth(due.fees.dueDate),
+        })
+      : t('All your children are paid up for this term.')
   }
-  const names = overdue.map(firstNameOf).join(' and ')
+  const names = namesList(overdue.map(firstNameOf), t)
   const paidUp = familyChildren.filter((c) => c.fees.status === 'paid')
   const paidNote = paidUp.length
-    ? ` ${paidUp.map(firstNameOf).join(' and ')} ${paidUp.length > 1 ? 'are' : 'is'} paid in full.`
+    ? ` ${t(paidUp.length > 1 ? '{{names}} are paid in full.' : '{{names}} is paid in full.', { names: namesList(paidUp.map(firstNameOf), t) })}`
     : ''
-  return `Pay now to keep ${names} on the bus.${paidNote}`
+  return `${t('Pay now to keep {{names}} on the bus.', { names })}${paidNote}`
 }
 
 function firstNameOf(child) {

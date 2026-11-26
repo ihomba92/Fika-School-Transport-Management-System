@@ -2,11 +2,13 @@ import { useEffect, useMemo } from 'react'
 import { Camera } from 'lucide-react'
 import { PHOTO_MAX_MB, PHOTO_TYPES } from '@/lib/validation/photo'
 import { cn } from '@/lib/utils'
+import { useTranslation } from 'react-i18next'
 
 // Choose a photo and see it straight away. `value` is a File the person just
 // picked, or the address of the photo already saved. On a phone the button
 // offers the camera or the gallery.
 export function PhotoInput({ id, value, onChange, describedBy, isInvalid }) {
+  const { t } = useTranslation()
   // A picked File isn't a web address yet; createObjectURL gives it one so
   // the <img> can show it. The effect frees that memory when it changes.
   const previewUrl = useMemo(
@@ -30,7 +32,7 @@ export function PhotoInput({ id, value, onChange, describedBy, isInvalid }) {
         {previewUrl ? (
           <img
             src={previewUrl}
-            alt="The chosen photo"
+            alt={t('The chosen photo')}
             className="size-full object-cover"
           />
         ) : (
@@ -56,10 +58,10 @@ export function PhotoInput({ id, value, onChange, describedBy, isInvalid }) {
           htmlFor={id}
           className="cursor-pointer rounded-full border bg-card px-4 py-2.5 text-sm font-semibold peer-focus-visible:ring-3 peer-focus-visible:ring-ring/50 hover:bg-muted"
         >
-          {previewUrl ? 'Change photo' : 'Choose photo'}
+          {previewUrl ? t('Change photo') : t('Choose photo')}
         </label>
         <span className="text-xs text-muted-foreground">
-          JPEG, PNG or WebP, up to {PHOTO_MAX_MB} MB
+          {t('JPEG, PNG or WebP, up to {{size}} MB', { size: PHOTO_MAX_MB })}
         </span>
       </div>
     </div>

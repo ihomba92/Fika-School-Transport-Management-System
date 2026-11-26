@@ -14,10 +14,12 @@ import { planFee } from '@/lib/fees'
 import { childSchema } from '@/lib/validation/child-schema'
 import { PlaceFields } from './place-fields'
 import { PlanOption } from './plan-option'
+import { useTranslation } from 'react-i18next'
 
 // The form for adding or editing a child. `onSave` receives checked values
 // in the shape the service expects (see child-schema.js).
 export function ChildForm({ defaultValues, termFee, submitLabel, onSave }) {
+  const { t } = useTranslation()
   const {
     register,
     control,
@@ -43,12 +45,14 @@ export function ChildForm({ defaultValues, termFee, submitLabel, onSave }) {
     >
       <fieldset className="flex flex-col gap-4">
         <legend className="mb-4 font-heading text-xl font-bold">
-          1 · About your child
+          {t('1 · About your child')}
         </legend>
         <FormField
           id="photo"
-          label="Photo"
-          hint="A recent, clear photo of your child's face. The driver uses it to recognise your child at the stop."
+          label={t('Photo')}
+          hint={t(
+            "A recent, clear photo of your child's face. The driver uses it to recognise your child at the stop.",
+          )}
           error={errors.photo?.message}
         >
           {(field) => (
@@ -70,7 +74,7 @@ export function ChildForm({ defaultValues, termFee, submitLabel, onSave }) {
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-[2fr_1fr]">
           <FormField
             id="fullName"
-            label="Full name"
+            label={t('Full name')}
             error={errors.fullName?.message}
           >
             {(field) => (
@@ -81,16 +85,22 @@ export function ChildForm({ defaultValues, termFee, submitLabel, onSave }) {
               />
             )}
           </FormField>
-          <FormField id="grade" label="Grade" error={errors.grade?.message}>
+          <FormField
+            id="grade"
+            label={t('Grade')}
+            error={errors.grade?.message}
+          >
             {(field) => (
               <select
                 className="h-12 rounded-xl border bg-card px-4 text-base outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 aria-invalid:border-danger"
                 {...field}
                 {...register('grade')}
               >
-                <option value="">Choose…</option>
+                <option value="">{t('Choose…')}</option>
                 {GRADES.map((grade) => (
-                  <option key={grade}>{grade}</option>
+                  <option key={grade} value={grade}>
+                    {t(grade)}
+                  </option>
                 ))}
               </select>
             )}
@@ -100,7 +110,7 @@ export function ChildForm({ defaultValues, termFee, submitLabel, onSave }) {
 
       <fieldset className="flex flex-col gap-3">
         <legend className="mb-4 font-heading text-xl font-bold">
-          2 · Transport plan
+          {t('2 · Transport plan')}
         </legend>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
           {PLAN_IDS.map((id) => (
@@ -117,11 +127,11 @@ export function ChildForm({ defaultValues, termFee, submitLabel, onSave }) {
       {plan.hasMorning && (
         <fieldset className="flex flex-col gap-4">
           <legend className="mb-4 font-heading text-xl font-bold">
-            3 · Pickup point
+            {t('3 · Pickup point')}
           </legend>
           <PlaceFields
             name="pickup"
-            label="Pickup point"
+            label={t('Pickup point')}
             register={register}
             control={control}
             errors={errors}
@@ -132,7 +142,9 @@ export function ChildForm({ defaultValues, termFee, submitLabel, onSave }) {
       {plan.hasEvening && (
         <fieldset className="flex flex-col gap-4">
           <legend className="mb-4 font-heading text-xl font-bold">
-            {plan.hasMorning ? '4' : '3'} · Drop-off point
+            {t('{{number}} · Drop-off point', {
+              number: plan.hasMorning ? 4 : 3,
+            })}
           </legend>
           {plan.hasMorning && (
             <div className="flex items-center gap-3">
@@ -150,13 +162,15 @@ export function ChildForm({ defaultValues, termFee, submitLabel, onSave }) {
                   />
                 )}
               />
-              <Label htmlFor="dropoffSameAsPickup">Same as pickup point</Label>
+              <Label htmlFor="dropoffSameAsPickup">
+                {t('Same as pickup point')}
+              </Label>
             </div>
           )}
           {needsOwnDropoff && (
             <PlaceFields
               name="dropoff"
-              label="Drop-off point"
+              label={t('Drop-off point')}
               register={register}
               control={control}
               errors={errors}
@@ -167,12 +181,12 @@ export function ChildForm({ defaultValues, termFee, submitLabel, onSave }) {
 
       {!plan.hasEvening && (
         <p className="text-sm text-muted-foreground">
-          A drop-off point is not needed for a morning-only plan.
+          {t('A drop-off point is not needed for a morning-only plan.')}
         </p>
       )}
       {!plan.hasMorning && (
         <p className="text-sm text-muted-foreground">
-          A pickup point is not needed for an evening-only plan.
+          {t('A pickup point is not needed for an evening-only plan.')}
         </p>
       )}
 
@@ -182,7 +196,7 @@ export function ChildForm({ defaultValues, termFee, submitLabel, onSave }) {
           variant="outline"
           className="h-12 rounded-full px-6 text-base"
         >
-          <Link to="/parent/children">Cancel</Link>
+          <Link to="/parent/children">{t('Cancel')}</Link>
         </Button>
         <Button
           type="submit"
@@ -194,7 +208,7 @@ export function ChildForm({ defaultValues, termFee, submitLabel, onSave }) {
           ) : (
             <Check className="size-5" aria-hidden="true" />
           )}
-          {isSubmitting ? 'Saving…' : submitLabel}
+          {isSubmitting ? t('Saving…') : submitLabel}
         </Button>
       </div>
     </Card>

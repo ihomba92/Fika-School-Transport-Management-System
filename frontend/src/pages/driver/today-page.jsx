@@ -1,17 +1,18 @@
 import { useState } from 'react'
-import { Loader2, Navigation } from 'lucide-react'
+import { ClipboardCheck, Loader2, Navigation } from 'lucide-react'
 import { Link, useNavigate } from 'react-router'
 import { toast } from 'sonner'
 import { LoadError } from '@/components/common/load-error'
 import { PageLoading } from '@/components/common/page-loading'
 import { BeforeYouStart } from '@/components/driver/before-you-start'
+import { BoardingCheck } from '@/components/driver/boarding-check'
 import { RoutePreview } from '@/components/driver/route-preview'
 import { TripCard } from '@/components/driver/trip-card'
-import { TRIP_KINDS } from '@/components/driver/trip-names'
 import { useClock } from '@/hooks/use-clock'
 import { useServiceData } from '@/hooks/use-service-data'
 import { firstName, formatLongDate, formatTime, greeting } from '@/lib/format'
 import { getDriverDay, startTrip } from '@/services/driver-service'
+import { useTranslation } from 'react-i18next'
 
 export function DriverTodayPage() {
   const day = useServiceData(getDriverDay)
@@ -26,6 +27,10 @@ export function DriverTodayPage() {
     trips.find((trip) => trip.status === 'active') ??
     trips.find((trip) => trip.status === 'ready') ??
     null
+  // Drop-offs still at school: the driver checks their students on board.
+  const toBoard = trips.filter(
+    (trip) => trip.kind === 'evening' && trip.status === 'ready',
+  )
 
   return (
     <div className="flex flex-col gap-6">
@@ -44,6 +49,11 @@ export function DriverTodayPage() {
           />
         ))}
       </div>
+      {toBoard.length > 0 && (
+        <div id="boarding" className="scroll-mt-24">
+          <BoardingCheck trips={toBoard} onChanged={day.reload} />
+        </div>
+      )}
       <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
         {featured && <RoutePreview trip={featured} />}
         <BeforeYouStart />
@@ -53,6 +63,7 @@ export function DriverTodayPage() {
 }
 
 function Hero({ driverName, trip, now, onStartFailed }) {
+  const { t } = useTranslation()
   const navigate = useNavigate()
   const [isStarting, setIsStarting] = useState(false)
   const hello = `${greeting(now)}, ${firstName(driverName)}`
@@ -61,12 +72,12 @@ function Hero({ driverName, trip, now, onStartFailed }) {
     setIsStarting(true)
     try {
       await startTrip(trip.id)
-      toast.success(`${TRIP_KINDS[trip.kind].name} started`, {
-        description: 'Parents can now see your bus. Drive safely.',
+      toast.success(t('{{trip}} started', { trip: trip.name }), {
+        description: t('Parents can now see your bus. Drive safely.'),
       })
       navigate('/driver/trip')
     } catch (error) {
-      toast.error(error.message)
+      toast.error(t(error.message))
       setIsStarting(false)
       onStartFailed()
     }
@@ -82,7 +93,7 @@ function Hero({ driverName, trip, now, onStartFailed }) {
           {hello}
         </h1>
         <p className="max-w-xl text-lg text-sidebar-foreground/80">
-          {heroMessage(trip)}
+          {heroMessage(trip, t)}
         </p>
       </div>
 
@@ -92,10 +103,19 @@ function Hero({ driverName, trip, now, onStartFailed }) {
           className="flex h-14 items-center gap-3 rounded-2xl bg-primary px-6 text-lg font-bold text-primary-foreground hover:bg-primary/90"
         >
           <Navigation className="size-5" aria-hidden="true" />
-          Continue {TRIP_KINDS[trip.kind].name.toLowerCase()}
+          {t('Continue {{trip}}', { trip: trip.name.toLowerCase() })}
         </Link>
       )}
-      {trip?.status === 'ready' && (
+      {trip?.status === 'ready' && trip.boarding?.isComplete === false && (
+        <a
+          href="#boarding"
+          className="flex h-14 items-center gap-3 rounded-2xl bg-primary px-6 text-lg font-bold text-primary-foreground hover:bg-primary/90"
+        >
+          <ClipboardCheck className="size-5" aria-hidden="true" />
+          {t('Check boarding')}
+        </a>
+      )}
+      {trip?.status === 'ready' && trip.boarding?.isComplete !== false && (
         <button
           type="button"
           onClick={start}
@@ -107,19 +127,43 @@ function Hero({ driverName, trip, now, onStartFailed }) {
           ) : (
             <Navigation className="size-5" aria-hidden="true" />
           )}
-          Start {TRIP_KINDS[trip.kind].name.toLowerCase()}
+          {t('Start {{trip}}', { trip: trip.name.toLowerCase() })}
         </button>
       )}
     </section>
   )
 }
 
-function heroMessage(trip) {
-  if (!trip) return 'All your trips are done for today. Thank you!'
-  const { name } = TRIP_KINDS[trip.kind]
+function heroMessage(trip, t) {
+  if (!trip) return t('All your trips are done for today. Thank you!')
+  const name = trip.name.toLowerCase()
   const stops = trip.stops.filter((stop) => stop.hasRiders).length
   if (trip.status === 'active') {
-    return `Your ${name.toLowerCase()} is running: ${trip.markedCount} of ${trip.riderCount} students marked, ${trip.stopsLeft} stops left.`
+    return t(
+      'Your {{trip}} is running: {{marked}} of {{total}} students marked, {{left}} stops left.',
+      {
+        trip: name,
+        marked: trip.markedCount,
+        total: trip.riderCount,
+        left: trip.stopsLeft,
+      },
+    )
   }
-  return `Your ${name.toLowerCase()} starts at ${formatTime(trip.startsAt)}: ${stops} stops and ${trip.riderCount} students, finishing by ${formatTime(trip.endsAt)}.`
+  if (trip.boarding && !trip.boarding.isComplete) {
+    const { boarded, expected } = trip.boarding
+    return t(
+      'Your {{trip}} leaves school at {{time}}. Check the students onto the bus first: {{boarded}} of {{expected}} on board.',
+      { trip: name, time: formatTime(trip.startsAt), boarded, expected },
+    )
+  }
+  return t(
+    'Your {{trip}} starts at {{time}}: {{stops}} stops and {{students}} students, finishing by {{end}}.',
+    {
+      trip: name,
+      time: formatTime(trip.startsAt),
+      stops,
+      students: trip.riderCount,
+      end: formatTime(trip.endsAt),
+    },
+  )
 }

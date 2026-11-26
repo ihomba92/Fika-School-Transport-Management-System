@@ -3,12 +3,14 @@ import { Wallet, X } from 'lucide-react'
 import { Dialog } from 'radix-ui'
 import { cn } from '@/lib/utils'
 import { MpesaForm } from './mpesa-form'
+import { useTranslation } from 'react-i18next'
 
 // "Pay balance": opens the M-Pesa form in a dialog. Nothing is shown when
 // nothing is owed, so the form only appears when a parent chooses to pay.
 // Radix Dialog keeps keyboard focus inside the dialog, closes on Escape and
 // returns focus to this button afterwards.
 export function PayBalanceButton({ familyChildren, phone, onPaid, className }) {
+  const { t } = useTranslation()
   const [isOpen, setIsOpen] = useState(false)
   const isOwing = familyChildren.some((child) => child.fees.balance > 0)
   if (!isOwing) return null
@@ -27,7 +29,7 @@ export function PayBalanceButton({ familyChildren, phone, onPaid, className }) {
         )}
       >
         <Wallet className="size-5" aria-hidden="true" />
-        Pay balance
+        {t('Pay balance')}
       </Dialog.Trigger>
 
       <Dialog.Portal>
@@ -39,18 +41,18 @@ export function PayBalanceButton({ familyChildren, phone, onPaid, className }) {
             <div className="flex flex-col gap-1">
               <div className="flex items-center gap-2">
                 <Dialog.Title className="font-heading text-xl font-bold">
-                  Pay with M-Pesa
+                  {t('Pay with M-Pesa')}
                 </Dialog.Title>
                 <span className="rounded-full bg-primary px-2.5 py-1 font-mono text-[10px] font-bold tracking-[0.08em] text-primary-foreground uppercase">
-                  Test mode
+                  {t('Test mode')}
                 </span>
               </div>
               <Dialog.Description className="text-sm text-muted-foreground">
-                Choose a child and amount. You confirm on your phone.
+                {t('Choose a child and amount. You confirm on your phone.')}
               </Dialog.Description>
             </div>
             <Dialog.Close
-              aria-label="Close"
+              aria-label={t('Close')}
               className="grid size-10 shrink-0 place-items-center rounded-full border hover:bg-muted"
             >
               <X className="size-4" aria-hidden="true" />

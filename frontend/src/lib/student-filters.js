@@ -3,7 +3,8 @@
 //   search  matches name, grade, guardian name or phone (spaces ignored)
 //   grade   'all' or a grade
 //   plan    'all' | 'both' | 'morning' | 'evening'
-//   bus     'all' | 'waiting' (no bus yet) | a bus id (morning or evening)
+//   bus     'all' | 'needs-route' (accepted, no route yet) | a bus id
+//           (pickup or drop-off)
 //   fees    'all' | 'paid' | 'upcoming' | 'overdue'
 export const ALL = 'all'
 
@@ -31,7 +32,7 @@ function matchesSearch(student, query) {
 
 function matchesBus(student, bus) {
   if (bus === ALL) return true
-  if (bus === 'waiting') return student.isWaiting === true
+  if (bus === 'needs-route') return student.stage === 'needs-route'
   return student.morningBusId === bus || student.eveningBusId === bus
 }
 

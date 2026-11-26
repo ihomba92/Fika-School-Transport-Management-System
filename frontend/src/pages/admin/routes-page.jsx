@@ -12,10 +12,9 @@ import { PageHeader } from '@/components/layout/page-header'
 import { useServiceData } from '@/hooks/use-service-data'
 import { getRoutes, getWaitingGroups } from '@/services/fleet-service'
 
-const RUN_NAMES = { morning: 'morning', evening: 'evening' }
-
-// Routes & assignment: students waiting for a bus, grouped by area with a
-// suggested route, bus and stop for each group (FR-3.3 to FR-3.6); and every
+// Routes & assignment: accepted students who need a route, grouped by area
+// with a suggested route, bus and stop for each group (FR-3.3 to FR-3.6;
+// new applications are accepted first, on their own screen); and every
 // route with its stops and students, and the buses the schedule puts on it
 // this shift (FR-3.10). Routes are a separate list from buses and drivers;
 // a busy route can have two buses in a shift. The admin creates and edits
@@ -36,8 +35,8 @@ export function AdminRoutesPage() {
   if (data.status === 'loading') return <PageLoading />
   if (data.status === 'error') return <LoadError onRetry={data.reload} />
 
-  const { routes, freeBuses, shift } = data.data
-  const runName = RUN_NAMES[shift.run]
+  const { routes, freeBuses, shift, timesTrip } = data.data
+  const runName = shift.trip.name.toLowerCase()
   const selected =
     routes.find((route) => route.id === params.get('route')) ?? routes[0]
   const students = routes.reduce((total, route) => total + route.fit.used, 0)
@@ -54,7 +53,7 @@ export function AdminRoutesPage() {
         <PageHeader
           eyebrow="Operations"
           title="Routes & assignment"
-          description={`Each route's stops and students, and the buses on it this ${runName}. Choose buses and drivers for each shift in the schedule.`}
+          description={`Each route's stops and students, and the buses on it for the ${runName}. Choose buses and drivers for each shift in the schedule.`}
         />
         <Link
           to="/admin/routes/new"
@@ -70,11 +69,11 @@ export function AdminRoutesPage() {
           label="Routes"
           icon={Route}
           value={routes.length}
-          unit={`this ${runName}`}
+          unit={`for the ${runName}`}
           isDark
         />
         <StatCard
-          label="Students on routes"
+          label={`On the ${runName}`}
           icon={Users}
           value={students}
           unit={`of ${seats} seats`}
@@ -118,7 +117,12 @@ export function AdminRoutesPage() {
               />
             </section>
           </div>
-          <RouteDetails key={selected.id} route={selected} shift={shift} />
+          <RouteDetails
+            key={selected.id}
+            route={selected}
+            shift={shift}
+            timesTrip={timesTrip}
+          />
         </div>
       ) : (
         <p className="rounded-2xl border border-dashed p-6 text-muted-foreground">

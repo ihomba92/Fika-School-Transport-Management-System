@@ -1,3 +1,4 @@
+import i18n from 'i18next'
 import { TIME_ZONE, atNairobiTime, toDateKey, addDays } from './dates'
 
 // "Jane Wanjiru Mwangi" → "Jane". Used for friendly greetings.
@@ -30,28 +31,65 @@ export function formatAmount(amount) {
   return numberFormat.format(amount)
 }
 
-// Month names are written out rather than left to Intl, because browsers
-// disagree on short months ("Sep" or "Sept").
-const MONTHS = [
-  'Jan',
-  'Feb',
-  'Mar',
-  'Apr',
-  'May',
-  'Jun',
-  'Jul',
-  'Aug',
-  'Sep',
-  'Oct',
-  'Nov',
-  'Dec',
-]
-const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+// Month and day names are written out rather than left to Intl, because
+// browsers disagree on short forms ("Sep" or "Sept"). English or Kiswahili,
+// whichever the person chose (src/i18n).
+const NAMES = {
+  en: {
+    months: [
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
+    ],
+    weekdays: ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'],
+    today: 'Today',
+    yesterday: 'Yesterday',
+    greetings: ['Good morning', 'Good afternoon', 'Good evening'],
+  },
+  sw: {
+    months: [
+      'Jan',
+      'Feb',
+      'Mac',
+      'Apr',
+      'Mei',
+      'Jun',
+      'Jul',
+      'Ago',
+      'Sep',
+      'Okt',
+      'Nov',
+      'Des',
+    ],
+    weekdays: [
+      'Jumapili',
+      'Jumatatu',
+      'Jumanne',
+      'Jumatano',
+      'Alhamisi',
+      'Ijumaa',
+      'Jumamosi',
+    ],
+    today: 'Leo',
+    yesterday: 'Jana',
+    greetings: ['Habari za asubuhi', 'Habari za mchana', 'Habari za jioni'],
+  },
+}
+const names = () => NAMES[i18n.language === 'sw' ? 'sw' : 'en']
 
 // '2026-10-01' → "1 Oct"
 export function formatDayMonth(dateKey) {
   const [, month, day] = dateKey.split('-').map(Number)
-  return `${day} ${MONTHS[month - 1]}`
+  return `${day} ${names().months[month - 1]}`
 }
 
 const timeFormat = new Intl.DateTimeFormat('en-GB', {
@@ -66,15 +104,16 @@ export function formatTime(date) {
   return timeFormat.format(date)
 }
 
-// '2026-10-13' → "Tue"
+// '2026-10-13' → "Tue" (the admin schedule; stays English)
+const WEEKDAYS = NAMES.en.weekdays
 export function formatWeekday(dateKey) {
   return WEEKDAYS[atNairobiTime(dateKey, '12:00').getUTCDay()]
 }
 
-// A Date → "Tue 13 Oct 2026", in Nairobi.
+// A Date → "Tue 13 Oct 2026" ("Jumanne 13 Okt 2026"), in Nairobi.
 export function formatLongDate(date) {
   const dateKey = toDateKey(date)
-  const weekday = WEEKDAYS[atNairobiTime(dateKey, '12:00').getUTCDay()]
+  const weekday = names().weekdays[atNairobiTime(dateKey, '12:00').getUTCDay()]
   return `${weekday} ${formatDayMonth(dateKey)} ${dateKey.slice(0, 4)}`
 }
 
@@ -95,20 +134,22 @@ export function formatWhen(date, now) {
   const dayKey = toDateKey(date)
   const todayKey = toDateKey(now)
   let day = formatDayMonth(dayKey)
-  if (dayKey === todayKey) day = 'Today'
-  else if (dayKey === addDays(todayKey, -1)) day = 'Yesterday'
+  if (dayKey === todayKey) day = names().today
+  else if (dayKey === addDays(todayKey, -1)) day = names().yesterday
   return `${day} · ${formatTime(date)}`
 }
 
 // "Good morning", "Good afternoon" or "Good evening", by Nairobi time.
 export function greeting(now) {
   const hour = Number(formatTime(now).slice(0, 2))
-  if (hour < 12) return 'Good morning'
-  if (hour < 17) return 'Good afternoon'
-  return 'Good evening'
+  const [morning, afternoon, evening] = names().greetings
+  if (hour < 12) return morning
+  if (hour < 17) return afternoon
+  return evening
 }
 
-// "1 student", "4 students".
+// "1 student", "4 students". English only (admin screens); the parent and
+// driver screens use t() with plurals.
 export function plural(count, word) {
   return `${count} ${count === 1 ? word : `${word}s`}`
 }

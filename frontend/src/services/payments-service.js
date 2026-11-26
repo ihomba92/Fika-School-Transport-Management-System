@@ -29,7 +29,9 @@ const reminders = {}
 export async function getPaymentsOverview() {
   await simulateNetwork(300)
   const term = currentTerm()
-  const billed = store.students.map(withDetails).filter((s) => !s.isWaiting)
+  const billed = store.students
+    .map(withDetails)
+    .filter((s) => s.stage === 'on-route')
   const overdue = billed.filter((s) => s.fees.status === 'overdue')
 
   const behind = overdue
@@ -146,7 +148,7 @@ export async function getFeeSettings() {
       ...term,
       status: termStatus(term, today),
     })),
-    billedCount: store.students.filter((s) => !s.isWaiting).length,
+    billedCount: store.students.filter((s) => s.stage === 'on-route').length,
     rules: { graceDays: GRACE_DAYS, newStudentDays: NEW_STUDENT_DAYS },
   }
 }

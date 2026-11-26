@@ -3,13 +3,16 @@ import { Card } from '@/components/common/card'
 import { formatTime } from '@/lib/format'
 import { BusStatusBadge } from './bus-status-badge'
 
-// "Trips this morning": each bus's progress and next stop, one row per bus.
+// The trip on now (the senior pickup, …): each bus's progress and next
+// stop, one row per bus.
 // The table scrolls sideways inside its card on phones.
-export function TripsTable({ buses }) {
+export function TripsTable({ buses, trip }) {
   return (
     <Card className="overflow-hidden">
       <div className="flex flex-col gap-0.5 p-5 pb-3">
-        <h2 className="font-heading text-lg font-bold">Trips this morning</h2>
+        <h2 className="font-heading text-lg font-bold">
+          {trip ? `${trip.name} trips` : 'Trips'}
+        </h2>
         <p className="text-sm text-muted-foreground">
           Stop progress and the time each bus reaches its next stop
         </p>

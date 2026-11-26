@@ -9,8 +9,10 @@ import { SubmitButton } from '@/components/auth/submit-button'
 import { TextInput } from '@/components/auth/text-input'
 import { emailOnlySchema } from '@/lib/validation/auth-schemas'
 import { requestPasswordReset } from '@/services/auth-service'
+import { useTranslation } from 'react-i18next'
 
 export function ForgotPasswordPage() {
+  const { t } = useTranslation()
   const [isSent, setIsSent] = useState(false)
   const {
     register,
@@ -30,21 +32,24 @@ export function ForgotPasswordPage() {
       className="flex flex-col gap-6"
     >
       <PageHeader
-        eyebrow="Password"
-        title="Forgot your password?"
-        description="Enter your email and we will send you a link to choose a new one."
+        eyebrow={t('Password')}
+        title={t('Forgot your password?')}
+        description={t(
+          'Enter your email and we will send you a link to choose a new one.',
+        )}
       />
 
       {/* The same message whether or not the email has an account, so nobody can
           use this form to find out who is registered. */}
       {isSent && (
         <FormAlert tone="success">
-          If that email has a Fika account, a reset link is on its way. It
-          expires in 1 hour.
+          {t(
+            'If that email has a Fika account, a reset link is on its way. It expires in 1 hour.',
+          )}
         </FormAlert>
       )}
 
-      <FormField id="email" label="Email" error={errors.email?.message}>
+      <FormField id="email" label={t('Email')} error={errors.email?.message}>
         {(field) => (
           <TextInput
             type="email"
@@ -56,17 +61,17 @@ export function ForgotPasswordPage() {
         )}
       </FormField>
 
-      <SubmitButton isSubmitting={isSubmitting} busyLabel="Sending…">
-        Send reset link
+      <SubmitButton isSubmitting={isSubmitting} busyLabel={t('Sending…')}>
+        {t('Send reset link')}
       </SubmitButton>
 
       <p className="text-center text-sm text-muted-foreground">
-        Remembered it?{' '}
+        {t('Remembered it?')}{' '}
         <Link
           to="/login"
           className="font-bold text-foreground underline underline-offset-2"
         >
-          Log in
+          {t('Log in')}
         </Link>
       </p>
     </form>

@@ -1,10 +1,12 @@
 import { useState } from 'react'
 import { Eye, EyeOff } from 'lucide-react'
 import { TextInput } from './text-input'
+import { useTranslation } from 'react-i18next'
 
 export function PasswordInput(props) {
   const [isVisible, setIsVisible] = useState(false)
   const Icon = isVisible ? EyeOff : Eye
+  const { t } = useTranslation()
 
   return (
     <div className="relative">
@@ -16,7 +18,7 @@ export function PasswordInput(props) {
       <button
         type="button"
         onClick={() => setIsVisible((visible) => !visible)}
-        aria-label={isVisible ? 'Hide password' : 'Show password'}
+        aria-label={isVisible ? t('Hide password') : t('Show password')}
         className="absolute inset-y-0 right-1 grid w-11 place-items-center text-muted-foreground hover:text-foreground"
       >
         <Icon className="size-5" aria-hidden="true" />

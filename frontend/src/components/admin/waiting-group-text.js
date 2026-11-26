@@ -1,7 +1,7 @@
-import { FAR_STOP_KM } from '@/lib/grouping'
+import { FAR_STOP_KM, fewestFree } from '@/lib/grouping'
 import { plural } from '@/lib/format'
 
-// Words for a waiting group's suggestion (FR-3.3 to FR-3.6). Kept out of the
+// Words for a suggestion for a group of accepted students who need a route (FR-3.3 to FR-3.6). Kept out of the
 // component so they can be tested.
 
 const km = (value) => `${value.toFixed(1)} km`
@@ -17,7 +17,7 @@ export function optionLabel(option) {
 
 // "Stop: Kirichwa Rd, 1.4 km from their homes · 23 seats free", under it.
 export function optionDetail(option) {
-  const free = Math.min(option.free.morning, option.free.evening)
+  const free = fewestFree(option.free)
   return `Stop: ${streetOf(option.stop)}, ${km(option.distanceKm)} from their homes · ${plural(free, 'seat')} free`
 }
 
@@ -25,7 +25,7 @@ export function optionDetail(option) {
 // bus that is on the route only some days this week.
 export function optionNotes(option) {
   const notes = []
-  const fullest = Math.max(option.seatsAfter.morning, option.seatsAfter.evening)
+  const fullest = Math.max(0, ...Object.values(option.seatsAfter))
   if (option.fits && fullest >= option.bus.seats * 0.9) {
     notes.push(
       `${option.bus.number} will be at ${fullest} of ${option.bus.seats} seats after this.`,
@@ -38,7 +38,7 @@ export function optionNotes(option) {
   }
   if (option.days < 5) {
     notes.push(
-      `${option.bus.number} is on the ${option.route.name} on ${option.days} of 5 mornings this week.`,
+      `${option.bus.number} is on the ${option.route.name} on ${option.days} of 5 days this week.`,
     )
   }
   return notes

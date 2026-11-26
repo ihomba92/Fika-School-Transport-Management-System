@@ -1,9 +1,11 @@
 import { formatAmount } from '@/lib/format'
+import { useTranslation } from 'react-i18next'
 
 // One transport plan as a large radio card. It is a real radio input (hidden
 // visually), so keyboards and screen readers treat the cards as one choice.
 // `has-checked:` styles the card when its radio is selected.
 export function PlanOption({ plan, price, registration }) {
+  const { t } = useTranslation()
   const Icon = plan.icon
   return (
     <label className="relative flex cursor-pointer flex-col gap-3 rounded-2xl border p-4 transition-colors hover:border-foreground/40 has-checked:border-2 has-checked:border-foreground has-checked:bg-accent has-focus-visible:ring-3 has-focus-visible:ring-ring/50">
@@ -12,13 +14,13 @@ export function PlanOption({ plan, price, registration }) {
         <Icon className="size-[18px]" aria-hidden="true" />
       </span>
       <span className="flex flex-col gap-0.5">
-        <span className="font-semibold">{plan.label}</span>
+        <span className="font-semibold">{t(plan.label)}</span>
         <span className="text-sm text-muted-foreground">
-          {plan.description}
+          {t(plan.description)}
         </span>
       </span>
       <span className="font-mono text-sm font-semibold">
-        KES {formatAmount(price)} / term
+        {t('KES {{amount}} / term', { amount: formatAmount(price) })}
       </span>
       <span
         aria-hidden="true"

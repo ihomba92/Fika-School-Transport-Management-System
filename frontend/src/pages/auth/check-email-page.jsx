@@ -6,10 +6,12 @@ import { Button } from '@/components/ui/button'
 import { PageHeader } from '@/components/layout/page-header'
 import { useCountdown } from '@/hooks/use-countdown'
 import { resendVerificationEmail } from '@/services/auth-service'
+import { useTranslation } from 'react-i18next'
 
 const RESEND_COOLDOWN_SECONDS = 60
 
 export function CheckEmailPage() {
+  const { t } = useTranslation()
   const { state } = useLocation()
   const email = state?.email
   const cooldown = useCountdown(RESEND_COOLDOWN_SECONDS)
@@ -19,8 +21,10 @@ export function CheckEmailPage() {
     setIsSending(true)
     await resendVerificationEmail(email)
     setIsSending(false)
-    toast.success('New link sent', {
-      description: `Check ${email} for the latest email from Fika.`,
+    toast.success(t('New link sent'), {
+      description: t('Check {{email}} for the latest email from Fika.', {
+        email,
+      }),
     })
     cooldown.restart()
   }
@@ -31,16 +35,20 @@ export function CheckEmailPage() {
         <MailCheck className="size-8" aria-hidden="true" />
       </span>
       <PageHeader
-        eyebrow="Step 2 of 3"
-        title="Check your email"
-        description={`We sent a confirmation link to ${email ?? 'your email address'}. Click it to finish creating your account.`}
+        eyebrow={t('Step 2 of 3')}
+        title={t('Check your email')}
+        description={t(
+          'We sent a confirmation link to {{email}}. Click it to finish creating your account.',
+          { email: email ?? t('your email address') },
+        )}
       />
 
       <div className="flex gap-3 rounded-xl border bg-card p-4 text-sm">
         <Clock className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
         <span>
-          The link works once and expires in 24 hours. Not there? Check your
-          spam folder.
+          {t(
+            'The link works once and expires in 24 hours. Not there? Check your spam folder.',
+          )}
         </span>
       </div>
 
@@ -52,17 +60,17 @@ export function CheckEmailPage() {
         className="h-12 w-full rounded-full text-base font-bold"
       >
         {cooldown.remaining > 0
-          ? `Resend link in ${cooldown.remaining}s`
-          : 'Resend link'}
+          ? t('Resend link in {{seconds}}s', { seconds: cooldown.remaining })
+          : t('Resend link')}
       </Button>
 
       <p className="text-center text-sm text-muted-foreground">
-        Wrong email?{' '}
+        {t('Wrong email?')}{' '}
         <Link
           to="/signup"
           className="font-bold text-foreground underline underline-offset-2"
         >
-          Go back and change it
+          {t('Go back and change it')}
         </Link>
       </p>
     </div>

@@ -1,19 +1,23 @@
 import { addDays, atNairobiTime, toDateKey } from './dates'
 import { plural } from './format'
+import {
+  coversGrade,
+  currentTrip,
+  sortTrips,
+  toClock,
+  toMinutes,
+} from './trip-times'
 
 // Routes, buses and drivers are separate records with no standing links
 // (FR-3.9). For every shift the admin decides, for each bus, who drives it
-// and which route it runs. A shift is one run on one school day:
-//   shift row  { id, date, run, busId, driverId, routeId }
+// and which route it runs. A shift is one trip time (lib/trip-times.js) on
+// one school day:
+//   shift row  { id, date, tripId, busId, driverId, routeId }
 // One row per bus per shift; driverId and routeId may be null. A route can
-// have several buses in a shift; a driver can be on only one bus.
+// have several buses in a shift; a driver can be on only one bus. A driver
+// can drive several shifts in a day (the senior pickup, then the junior).
 // Pure functions, shared by the mock services and the tests. The Flask API
 // checks the same rules on the server.
-
-export const RUNS = ['morning', 'evening']
-
-// The evening run leaves school at 15:45 (FR-4.1).
-const EVENING_START = '15:45'
 
 // Monday to Friday of the week that `dateKey` is in.
 export function schoolWeek(dateKey) {
@@ -22,59 +26,65 @@ export function schoolWeek(dateKey) {
   return [0, 1, 2, 3, 4].map((offset) => addDays(monday, offset))
 }
 
-// The run that is on now, or next: morning until noon, then evening.
-export function currentRun(now) {
-  const hour = Number(
-    new Intl.DateTimeFormat('en-GB', {
-      hour: '2-digit',
-      hour12: false,
-      timeZone: 'Africa/Nairobi',
-    }).format(now),
-  )
-  return hour < 12 ? 'morning' : 'evening'
-}
-
 // A shift that has finished can't be changed: it is a record of what
-// happened. Today's shifts and later ones can, even while a bus is out (a
-// driver can fall ill, a bus can break down).
-export function isPastShift(date, run, now) {
+// happened. Today's shifts can, until a later trip time is on (a driver can
+// fall ill, a bus can break down while it is out).
+export function isPastShift(date, trip, trips, now) {
   const today = toDateKey(now)
   if (date !== today) return date < today
-  return run === 'morning' && currentRun(now) === 'evening'
+  const current = currentTrip(trips, now)
+  return Boolean(current) && toMinutes(current.time) > toMinutes(trip.time)
 }
 
-export function shiftRows(shifts, date, run) {
-  return shifts.filter((row) => row.date === date && row.run === run)
+export function shiftRows(shifts, date, tripId) {
+  return shifts.filter((row) => row.date === date && row.tripId === tripId)
 }
 
-// The stops of a route for one run. A route stores its morning stops
-// (depot first, school last) with times; the evening run is the same stops
-// in reverse, leaving school at 15:45 and keeping the same gaps between
-// stops.
-export function runStops(route, run) {
-  if (run === 'morning') return route.stops
+// The stops of a route on one trip. A route stores its stops in pickup
+// order (depot first, school last) with times; the trip time moves them so
+// the run starts at the trip's time, keeping the gaps between stops. A
+// drop-off is the same stops in reverse, leaving school at the trip's time.
+export function runStops(route, trip) {
+  const start = toMinutes(trip.time)
+  if (trip.run === 'morning') {
+    const shift = start - toMinutes(route.stops[0].time)
+    return route.stops.map((stop) => ({
+      ...stop,
+      time: toClock(toMinutes(stop.time) + shift),
+    }))
+  }
   const school = toMinutes(route.stops.at(-1).time)
-  const start = toMinutes(EVENING_START)
   return route.stops.toReversed().map((stop) => ({
     ...stop,
     time: toClock(start + (school - toMinutes(stop.time))),
   }))
 }
 
-// Students on a bus for one run. A student's route and bus stay the same
+// The students who ride a trip: their grade is the trip's, and their plan
+// has that run (only then do they have a bus for it).
+export function tripStudents(students, trip) {
+  return students.filter(
+    (s) => s[`${trip.run}BusId`] && coversGrade(trip, s.grade),
+  )
+}
+
+// Students on a bus for one trip. A student's route and bus stay the same
 // until the admin changes them, whatever the shift.
-export function busStudents(students, busId, run) {
-  return students.filter((s) => s[`${run}BusId`] === busId)
+export function busStudents(students, busId, trip) {
+  return tripStudents(students, trip).filter(
+    (s) => s[`${trip.run}BusId`] === busId,
+  )
 }
 
 // Problems in one shift, before it is saved.
 //   errors      { busId: message }   the shift can't be saved
 //   rowNotes    { busId: [message] } warnings shown on the bus's row
 //   shiftNotes  [message]            warnings about the whole shift
-export function checkShift({ rows, run, buses, drivers, routes, students }) {
+export function checkShift({ rows, trip, buses, drivers, routes, students }) {
   const errors = {}
   const rowNotes = {}
   const shiftNotes = []
+  const { run } = trip
   const byId = (list, id) => list.find((item) => item.id === id)
   const note = (busId, message) => {
     rowNotes[busId] = [...(rowNotes[busId] ?? []), message]
@@ -93,7 +103,7 @@ export function checkShift({ rows, run, buses, drivers, routes, students }) {
       }
     }
 
-    const riders = busStudents(students, row.busId, run)
+    const riders = busStudents(students, row.busId, trip)
     if (riders.length > bus.seats) {
       note(
         row.busId,
@@ -121,10 +131,11 @@ export function checkShift({ rows, run, buses, drivers, routes, students }) {
   }
 
   // A route whose students' buses aren't on it this shift.
+  const riding = tripStudents(students, trip)
   for (const route of routes) {
-    const onRoute = students.filter((s) => s[`${run}RouteId`] === route.id)
-    const stranded = onRoute.filter(
+    const stranded = riding.filter(
       (s) =>
+        s[`${run}RouteId`] === route.id &&
         !rows.some(
           (row) => row.busId === s[`${run}BusId`] && row.routeId === route.id,
         ),
@@ -140,61 +151,57 @@ export function checkShift({ rows, run, buses, drivers, routes, students }) {
   return { errors, rowNotes, shiftNotes }
 }
 
-// Copies one shift's rows to the same run on other days, replacing what
-// those days had. Returns the new list of all shift rows.
-export function copyShift(shifts, { date, run }, toDates) {
-  const source = shiftRows(shifts, date, run)
+// Copies one shift's rows to the same trip time on other days, replacing
+// what those days had. Returns the new list of all shift rows.
+export function copyShift(shifts, { date, tripId }, toDates) {
+  const source = shiftRows(shifts, date, tripId)
   const kept = shifts.filter(
-    (row) => !(row.run === run && toDates.includes(row.date)),
+    (row) => !(row.tripId === tripId && toDates.includes(row.date)),
   )
   const copies = toDates.flatMap((toDate) =>
     source.map((row) => ({
       ...row,
-      id: shiftId(toDate, run, row.busId),
+      id: shiftId(toDate, tripId, row.busId),
       date: toDate,
     })),
   )
   return [...kept, ...copies]
 }
 
-export function shiftId(date, run, busId) {
-  return `${date}-${run}-${busId}`
-}
-
-function toMinutes(time) {
-  const [hours, minutes] = time.split(':').map(Number)
-  return hours * 60 + minutes
-}
-
-function toClock(totalMinutes) {
-  const hours = String(Math.floor(totalMinutes / 60)).padStart(2, '0')
-  const minutes = String(totalMinutes % 60).padStart(2, '0')
-  return `${hours}:${minutes}`
+export function shiftId(date, tripId, busId) {
+  return `${date}-${tripId}-${busId}`
 }
 
 // A bus's row in a shift: who drives it and which route it runs, or null.
-export function busShift(shifts, date, run, busId) {
+export function busShift(shifts, date, tripId, busId) {
   return (
     shifts.find(
-      (row) => row.date === date && row.run === run && row.busId === busId,
+      (row) =>
+        row.date === date && row.tripId === tripId && row.busId === busId,
     ) ?? null
   )
 }
 
-// A driver's rows on a day, morning first: the buses they drive.
-export function driverShifts(shifts, date, driverId) {
-  return RUNS.map((run) =>
-    shifts.find(
-      (row) =>
-        row.date === date && row.run === run && row.driverId === driverId,
-    ),
-  ).filter(Boolean)
+// A driver's rows on a day, in the order of the trip times: the buses they
+// drive.
+export function driverShifts(shifts, trips, date, driverId) {
+  return sortTrips(trips)
+    .map((trip) =>
+      shifts.find(
+        (row) =>
+          row.date === date &&
+          row.tripId === trip.id &&
+          row.driverId === driverId,
+      ),
+    )
+    .filter(Boolean)
 }
 
-// On how many days of `week` a bus runs `routeId` on `run`: lets the student
-// profile warn when a child's bus isn't usually on the child's route.
-export function daysOnRoute(shifts, week, run, busId, routeId) {
+// On how many days of `week` a bus runs `routeId` on a trip: lets the
+// student profile warn when a child's bus isn't usually on the child's
+// route.
+export function daysOnRoute(shifts, week, tripId, busId, routeId) {
   return week.filter(
-    (date) => busShift(shifts, date, run, busId)?.routeId === routeId,
+    (date) => busShift(shifts, date, tripId, busId)?.routeId === routeId,
   ).length
 }

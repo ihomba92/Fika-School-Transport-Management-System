@@ -1,7 +1,7 @@
 import { Card } from '@/components/common/card'
 import { StatusBadge } from '@/components/common/status-badge'
 
-// One bus on the Drivers & buses screen: plate, seats, its students per run,
+// One bus on the Drivers & buses screen: plate, seats, its busiest trip,
 // and its driver and route in the shift on now. A bus has no driver or route
 // of its own; the schedule sets them for each shift (FR-3.9, FR-3.11).
 export function FleetBusCard({ bus, runName }) {
@@ -19,14 +19,13 @@ export function FleetBusCard({ bus, runName }) {
             </span>
           </h3>
           <p className="text-sm text-muted-foreground">
-            {bus.seats} seats · {bus.load.morning} students morning,{' '}
-            {bus.load.evening} evening
+            {bus.seats} seats · up to {busiest(bus.load)} students a trip
           </p>
         </div>
       </div>
       <div className="mt-auto flex flex-col gap-1 rounded-2xl bg-muted/60 p-3 text-sm">
         <span className="font-mono text-[10px] font-semibold tracking-[0.08em] text-muted-foreground uppercase">
-          This {runName}
+          The {runName}
         </span>
         {bus.now.route || bus.now.driver ? (
           <span className="font-semibold">
@@ -41,4 +40,9 @@ export function FleetBusCard({ bus, runName }) {
       </div>
     </Card>
   )
+}
+
+// The most students the bus carries on any one trip time.
+function busiest(load) {
+  return Math.max(0, ...Object.values(load))
 }

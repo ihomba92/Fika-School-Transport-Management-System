@@ -52,7 +52,7 @@ export function AdminLiveMapPage() {
       <PageHeader
         eyebrow="Operations"
         title="Live map"
-        description="Every bus on its morning trip. Parents only ever see their own child's bus."
+        description={`Every bus on the ${data.trip ? data.trip.name.toLowerCase() : 'trip on now'}. Parents only ever see their own child's bus.`}
       />
 
       <div

@@ -13,8 +13,10 @@ import { useServiceData } from '@/hooks/use-service-data'
 import { formatLocalPhone, formatPhone } from '@/lib/format'
 import { driverPhoneSchema } from '@/lib/validation/driver-schemas'
 import { getDriverProfile, updateDriverPhone } from '@/services/driver-service'
+import { useTranslation } from 'react-i18next'
 
 export function DriverProfilePage() {
+  const { t } = useTranslation()
   const profile = useServiceData(getDriverProfile)
 
   if (profile.status === 'loading') return <PageLoading />
@@ -26,7 +28,7 @@ export function DriverProfilePage() {
 
   return (
     <div className="flex max-w-3xl flex-col gap-6">
-      <PageHeader eyebrow="Account" title="Profile" />
+      <PageHeader eyebrow={t('Account')} title={t('Profile')} />
 
       <Card className="flex flex-col gap-6 p-6 sm:flex-row sm:items-center">
         <PersonPhoto
@@ -35,10 +37,10 @@ export function DriverProfilePage() {
           className="size-28 rounded-3xl text-3xl"
         />
         <dl className="grid flex-1 grid-cols-1 gap-4 sm:grid-cols-2">
-          <Detail label="Name" value={driver.name} />
-          <Detail label="Licence number" value={driver.licence} />
-          <Detail label="Bus" value={`${bus.number} · ${bus.plate}`} />
-          <Detail label="Route" value={bus.route} />
+          <Detail label={t('Name')} value={driver.name} />
+          <Detail label={t('Licence number')} value={driver.licence} />
+          <Detail label={t('Bus')} value={`${bus.number} · ${bus.plate}`} />
+          <Detail label={t('Route')} value={bus.route} />
         </dl>
       </Card>
 
@@ -65,6 +67,7 @@ function Detail({ label, value }) {
 // FR-4.6: the one detail a driver can change. Parents and the transport
 // office call this number, so the change is logged and the office is told.
 function PhoneForm({ phone, onSaved }) {
+  const { t } = useTranslation()
   const {
     register,
     handleSubmit,
@@ -76,8 +79,10 @@ function PhoneForm({ phone, onSaved }) {
 
   async function save(values) {
     const driver = await updateDriverPhone(values)
-    toast.success('Phone number saved', {
-      description: `Parents and the office will now call ${formatPhone(driver.phone)}.`,
+    toast.success(t('Phone number saved'), {
+      description: t('Parents and the office will now call {{phone}}.', {
+        phone: formatPhone(driver.phone),
+      }),
     })
     onSaved()
   }
@@ -90,23 +95,28 @@ function PhoneForm({ phone, onSaved }) {
       className="flex flex-col gap-4 p-6"
     >
       <div className="flex flex-col gap-1">
-        <h2 className="font-heading text-lg font-bold">Phone number</h2>
+        <h2 className="font-heading text-lg font-bold">{t('Phone number')}</h2>
         <p className="text-sm text-muted-foreground">
-          Parents and the school call this number. The transport office is told
-          when you change it.
+          {t(
+            'Parents and the school call this number. The transport office is told when you change it.',
+          )}
         </p>
       </div>
-      <FormField id="phone" label="Mobile number" error={errors.phone?.message}>
+      <FormField
+        id="phone"
+        label={t('Mobile number')}
+        error={errors.phone?.message}
+      >
         {(field) => <PhoneInput {...field} {...register('phone')} />}
       </FormField>
       <div className="flex justify-end">
         <SubmitButton
           isSubmitting={isSubmitting}
-          busyLabel="Saving…"
+          busyLabel={t('Saving…')}
           disabled={!isDirty}
           className="sm:w-auto sm:px-8"
         >
-          Save number
+          {t('Save number')}
         </SubmitButton>
       </div>
     </Card>

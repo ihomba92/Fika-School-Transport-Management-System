@@ -2,15 +2,17 @@ import { Download, ReceiptText } from 'lucide-react'
 import { Card } from '@/components/common/card'
 import { SCHOOL } from '@/data/school'
 import { formatDayMonth, formatKes } from '@/lib/format'
+import { useTranslation } from 'react-i18next'
 
 // Payments made this term. "Download" saves a simple text receipt; the back
 // end will produce PDF receipts later.
 export function ReceiptsList({ payments }) {
+  const { t } = useTranslation()
   return (
     <Card className="flex flex-col gap-2 p-6">
-      <h2 className="font-heading text-lg font-bold">Receipts</h2>
+      <h2 className="font-heading text-lg font-bold">{t('Receipts')}</h2>
       {payments.length === 0 ? (
-        <p className="text-sm text-muted-foreground">No payments yet.</p>
+        <p className="text-sm text-muted-foreground">{t('No payments yet.')}</p>
       ) : (
         <ul className="flex flex-col divide-y">
           {payments.map((payment) => (
@@ -31,9 +33,11 @@ export function ReceiptsList({ payments }) {
               </span>
               <button
                 type="button"
-                onClick={() => downloadReceipt(payment)}
-                aria-label={`Download receipt ${payment.receipt}`}
-                title="Download receipt"
+                onClick={() => downloadReceipt(payment, t)}
+                aria-label={t('Download receipt {{receipt}}', {
+                  receipt: payment.receipt,
+                })}
+                title={t('Download receipt')}
                 className="grid size-10 place-items-center rounded-full border hover:bg-muted"
               >
                 <Download className="size-4" aria-hidden="true" />
@@ -46,16 +50,16 @@ export function ReceiptsList({ payments }) {
   )
 }
 
-function downloadReceipt(payment) {
+function downloadReceipt(payment, t) {
   const text = [
-    `${SCHOOL.name} · Transport fee receipt`,
+    `${SCHOOL.name} · ${t('Transport fee receipt')}`,
     '',
-    `Child:          ${payment.childName}`,
-    `Amount:         ${formatKes(payment.amount)}`,
-    `Paid on:        ${payment.paidOn}`,
-    `M-Pesa receipt: ${payment.receipt}`,
+    `${t('Child')}: ${payment.childName}`,
+    `${t('Amount')}: ${formatKes(payment.amount)}`,
+    `${t('Paid on')}: ${payment.paidOn}`,
+    `${t('M-Pesa receipt')}: ${payment.receipt}`,
     '',
-    'Sent by Fika · school transport management',
+    t('Sent by Fika · school transport management'),
   ].join('\n')
 
   // A Blob is a file made in the browser; a temporary link downloads it.

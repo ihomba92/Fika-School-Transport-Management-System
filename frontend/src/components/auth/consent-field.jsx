@@ -1,9 +1,11 @@
 import { Controller } from 'react-hook-form'
 import { Link } from 'react-router'
 import { Checkbox } from '@/components/ui/checkbox'
+import { Trans, useTranslation } from 'react-i18next'
 
 // The privacy consent tick-box required by Kenya's Data Protection Act.
 export function ConsentField({ control, error }) {
+  const { t } = useTranslation()
   return (
     <div className="flex flex-col gap-2">
       <div className="flex items-start gap-3 rounded-xl border bg-card p-4">
@@ -22,27 +24,29 @@ export function ConsentField({ control, error }) {
           )}
         />
         <label htmlFor="consent" className="text-sm leading-5">
-          I agree to the{' '}
-          <Link
-            to="/terms"
-            className="font-semibold underline underline-offset-2"
-          >
-            terms
-          </Link>{' '}
-          and{' '}
-          <Link
-            to="/privacy"
-            className="font-semibold underline underline-offset-2"
-          >
-            privacy notice
-          </Link>
-          , and consent to Fika storing my children&apos;s names and pickup
-          locations to run school transport.
+          <Trans
+            t={t}
+            i18nKey="I agree to the <terms>terms</terms> and <privacy>privacy notice</privacy>, and consent to Fika storing my children’s names and pickup locations to run school transport."
+            components={{
+              terms: (
+                <Link
+                  to="/terms"
+                  className="font-semibold underline underline-offset-2"
+                />
+              ),
+              privacy: (
+                <Link
+                  to="/privacy"
+                  className="font-semibold underline underline-offset-2"
+                />
+              ),
+            }}
+          />
         </label>
       </div>
       {error && (
         <p id="consent-error" className="text-sm font-medium text-danger">
-          {error}
+          {t(error)}
         </p>
       )}
     </div>

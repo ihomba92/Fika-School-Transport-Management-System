@@ -1,6 +1,6 @@
 import { useCallback } from 'react'
-import { ChevronLeft, ChevronRight, Moon, Sun } from 'lucide-react'
-import { useSearchParams } from 'react-router'
+import { ChevronLeft, ChevronRight, Clock, Moon, Sun } from 'lucide-react'
+import { Link, useSearchParams } from 'react-router'
 import { ShiftTable } from '@/components/admin/shift-table'
 import { LoadError } from '@/components/common/load-error'
 import { PageLoading } from '@/components/common/page-loading'
@@ -8,11 +8,11 @@ import { PageHeader } from '@/components/layout/page-header'
 import { useServiceData } from '@/hooks/use-service-data'
 import { addDays } from '@/lib/dates'
 import { formatDayMonth, formatWeekday } from '@/lib/format'
-import { RUNS, shiftRows } from '@/lib/shifts'
+import { shiftRows } from '@/lib/shifts'
+import { gradeRange } from '@/lib/trip-times'
 import { cn } from '@/lib/utils'
 import { getSchedule } from '@/services/fleet-service'
 
-const RUN_LABELS = { morning: 'Morning', evening: 'Evening' }
 const RUN_ICONS = { morning: Sun, evening: Moon }
 const DAY_NAMES = {
   Mon: 'Monday',
@@ -22,11 +22,13 @@ const DAY_NAMES = {
   Fri: 'Friday',
 }
 
-// The schedule (FR-3.11): a school week of shifts, morning and evening.
-// For each shift the admin chooses, for every bus, its driver and its
-// route. Buses, drivers and routes have no standing links, so this is where
-// they are put together. The week, day and run are in the address
-// (?date=2026-10-13&run=morning), so other pages can link to a shift.
+// The schedule (FR-3.11): a school week of shifts, one per trip time per
+// day (the senior pickup, the junior pickup, …; set in Trip times). For
+// each shift the admin chooses, for every bus, its driver and its route.
+// Buses, drivers and routes have no standing links, so this is where they
+// are put together. The week, day and trip time are in the address
+// (?date=2026-10-13&trip=trip-senior-pickup), so other pages can link to a
+// shift.
 export function AdminSchedulePage() {
   const [params, setParams] = useSearchParams()
   const dateParam = params.get('date')
@@ -39,44 +41,72 @@ export function AdminSchedulePage() {
   }
 
   const data = schedule.data
-  const { week, today, current } = data
+  const { week, today, current, trips } = data
   const date = week.includes(dateParam)
     ? dateParam
     : week.includes(today)
       ? today
       : week[0]
-  const run = RUNS.includes(params.get('run'))
-    ? params.get('run')
-    : date === today
-      ? current.run
-      : 'morning'
+  const trip =
+    trips.find((t) => t.id === params.get('trip')) ??
+    (date === today && current.trip
+      ? trips.find((t) => t.id === current.trip.id)
+      : trips[0])
 
-  function go(nextDate, nextRun) {
-    setParams({ date: nextDate, run: nextRun }, { replace: true })
+  function go(nextDate, nextTrip) {
+    setParams(
+      nextTrip ? { date: nextDate, trip: nextTrip } : { date: nextDate },
+      { replace: true },
+    )
   }
 
-  const shiftName = `${DAY_NAMES[formatWeekday(date)]} ${run}`
+  const header = (
+    <PageHeader
+      eyebrow="Operations"
+      title="Schedule"
+      description="Plan the week shift by shift: at each trip time, for every bus, choose who drives it and which route it runs. A busy route can have two buses."
+      actions={
+        <Link
+          to="/admin/schedule/trip-times"
+          className="flex h-11 items-center gap-2 rounded-full border bg-card px-4 text-sm font-semibold hover:bg-muted"
+        >
+          <Clock className="size-4" aria-hidden="true" />
+          Trip times
+        </Link>
+      }
+    />
+  )
+
+  if (!trip) {
+    return (
+      <div className="flex flex-col gap-6">
+        {header}
+        <p className="rounded-2xl border bg-card p-6 text-muted-foreground">
+          There are no trip times yet. Add the school’s pickup and drop-off
+          times first, then plan who drives each one.
+        </p>
+      </div>
+    )
+  }
+
+  const shiftName = `${DAY_NAMES[formatWeekday(date)]} ${trip.name.toLowerCase()}`
   const shift = {
     date,
-    run,
-    rows: shiftRows(data.shifts, date, run),
-    isPast: data.past[`${date}-${run}`],
-    isRunning: date === current.date && run === current.run,
+    trip,
+    rows: shiftRows(data.shifts, date, trip.id),
+    isPast: data.past[`${date}-${trip.id}`],
+    isRunning: date === current.date && trip.id === current.trip?.id,
   }
 
   return (
     <div className="flex flex-col gap-6">
-      <PageHeader
-        eyebrow="Operations"
-        title="Schedule"
-        description="Plan the week shift by shift: for every bus, choose who drives it and which route it runs. A busy route can have two buses."
-      />
+      {header}
 
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2">
           <button
             type="button"
-            onClick={() => go(addDays(week[0], -7), run)}
+            onClick={() => go(addDays(week[0], -7), trip.id)}
             aria-label="Previous week"
             className="grid size-11 place-items-center rounded-full border hover:bg-muted"
           >
@@ -88,39 +118,12 @@ export function AdminSchedulePage() {
           </h2>
           <button
             type="button"
-            onClick={() => go(addDays(week[0], 7), run)}
+            onClick={() => go(addDays(week[0], 7), trip.id)}
             aria-label="Next week"
             className="grid size-11 place-items-center rounded-full border hover:bg-muted"
           >
             <ChevronRight className="size-4" aria-hidden="true" />
           </button>
-        </div>
-
-        <div
-          role="group"
-          aria-label="Run"
-          className="flex gap-1 rounded-full bg-muted p-1"
-        >
-          {RUNS.map((r) => {
-            const Icon = RUN_ICONS[r]
-            return (
-              <button
-                key={r}
-                type="button"
-                aria-pressed={r === run}
-                onClick={() => go(date, r)}
-                className={cn(
-                  'flex h-10 items-center gap-2 rounded-full px-4 text-sm font-semibold',
-                  r === run
-                    ? 'bg-sidebar text-sidebar-foreground'
-                    : 'hover:bg-card',
-                )}
-              >
-                <Icon className="size-4" aria-hidden="true" />
-                {RUN_LABELS[r]}
-              </button>
-            )
-          })}
         </div>
       </div>
 
@@ -130,7 +133,7 @@ export function AdminSchedulePage() {
             key={day}
             type="button"
             aria-pressed={day === date}
-            onClick={() => go(day, run)}
+            onClick={() => go(day, trip.id)}
             className={cn(
               'flex flex-col items-center gap-0.5 rounded-2xl border p-2 sm:p-3',
               day === date
@@ -151,9 +154,54 @@ export function AdminSchedulePage() {
         ))}
       </div>
 
+      <div
+        role="group"
+        aria-label="Trip time"
+        className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap"
+      >
+        {trips.map((t) => {
+          const Icon = RUN_ICONS[t.run]
+          const isChosen = t.id === trip.id
+          return (
+            <button
+              key={t.id}
+              type="button"
+              aria-pressed={isChosen}
+              onClick={() => go(date, t.id)}
+              className={cn(
+                'flex min-h-11 items-center gap-2.5 rounded-2xl border px-4 py-2 text-left',
+                isChosen
+                  ? 'border-sidebar bg-sidebar text-sidebar-foreground'
+                  : 'bg-card hover:bg-muted',
+              )}
+            >
+              <Icon
+                className={cn('size-4 shrink-0', isChosen && 'text-primary')}
+                aria-hidden="true"
+              />
+              <span className="flex flex-col">
+                <span className="text-sm font-semibold">
+                  {t.name} · <span className="font-mono">{t.time}</span>
+                </span>
+                <span
+                  className={cn(
+                    'text-xs',
+                    isChosen
+                      ? 'text-sidebar-foreground/70'
+                      : 'text-muted-foreground',
+                  )}
+                >
+                  {gradeRange(t)}
+                </span>
+              </span>
+            </button>
+          )
+        })}
+      </div>
+
       <ShiftTable
         // A fresh table (and fresh draft) for each shift and after saving.
-        key={`${date}-${run}-${shift.rows.map((r) => `${r.driverId}${r.routeId}`).join()}`}
+        key={`${date}-${trip.id}-${shift.rows.map((r) => `${r.driverId}${r.routeId}`).join()}`}
         shift={shift}
         data={data}
         shiftName={shiftName}

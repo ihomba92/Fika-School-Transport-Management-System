@@ -2,6 +2,7 @@ import {
   Bell,
   CalendarDays,
   IdCard,
+  Inbox,
   UserRound,
   Bus,
   LayoutGrid,
@@ -31,6 +32,11 @@ export const NAVIGATION = {
       {
         title: 'People',
         items: [
+          {
+            to: '/admin/applications',
+            label: 'New applications',
+            icon: Inbox,
+          },
           { to: '/admin/students', label: 'Students', icon: Users },
           { to: '/admin/drivers', label: 'Drivers & buses', icon: IdCard },
         ],

@@ -1,16 +1,29 @@
-import { CalendarDays, Users, Wallet, WifiOff } from 'lucide-react'
+import {
+  CalendarDays,
+  Inbox,
+  UserX,
+  Users,
+  Wallet,
+  WifiOff,
+} from 'lucide-react'
 import { Link } from 'react-router'
 
 const ICONS = {
   signal: WifiOff,
   fees: Wallet,
   waiting: Users,
+  applications: Inbox,
   shift: CalendarDays,
+  boarding: UserX,
 }
+
+// Kinds about a child's safety or a bus that can't run: shown in red.
+const URGENT = ['signal', 'shift', 'boarding']
 
 // "Needs attention": the few things the admin should act on now. Each item
 // has one clear action (a call, or a link to the schedule or a filtered
-// list), or none when there's nothing to press.
+// list), or none when there's nothing to press, and sometimes a second
+// link (`link`).
 export function AttentionList({ items }) {
   return (
     <section
@@ -40,7 +53,7 @@ export function AttentionList({ items }) {
             >
               <span
                 className={
-                  ['signal', 'shift'].includes(item.kind)
+                  URGENT.includes(item.kind)
                     ? 'grid size-10 shrink-0 place-items-center rounded-xl bg-danger-soft text-danger'
                     : 'grid size-10 shrink-0 place-items-center rounded-xl bg-accent text-accent-foreground'
                 }
@@ -50,21 +63,31 @@ export function AttentionList({ items }) {
               <div className="flex min-w-0 flex-col items-start gap-1.5">
                 <h3 className="font-semibold">{item.title}</h3>
                 <p className="text-sm text-muted-foreground">{item.detail}</p>
-                {!item.action ? null : item.action.href ? (
-                  <a
-                    href={item.action.href}
-                    className="mt-1 rounded-full bg-primary px-4 py-2 text-sm font-bold text-primary-foreground"
-                  >
-                    {item.action.label}
-                  </a>
-                ) : (
-                  <Link
-                    to={item.action.to}
-                    className="mt-1 rounded-full border px-4 py-2 text-sm font-semibold hover:bg-muted"
-                  >
-                    {item.action.label}
-                  </Link>
-                )}
+                <div className="mt-1 flex flex-wrap gap-2">
+                  {!item.action ? null : item.action.href ? (
+                    <a
+                      href={item.action.href}
+                      className="rounded-full bg-primary px-4 py-2 text-sm font-bold text-primary-foreground"
+                    >
+                      {item.action.label}
+                    </a>
+                  ) : (
+                    <Link
+                      to={item.action.to}
+                      className="rounded-full border px-4 py-2 text-sm font-semibold hover:bg-muted"
+                    >
+                      {item.action.label}
+                    </Link>
+                  )}
+                  {item.link && (
+                    <Link
+                      to={item.link.to}
+                      className="rounded-full border px-4 py-2 text-sm font-semibold hover:bg-muted"
+                    >
+                      {item.link.label}
+                    </Link>
+                  )}
+                </div>
               </div>
             </li>
           )

@@ -1,23 +1,26 @@
 import { Map as MapIcon } from 'lucide-react'
+import { Trans, useTranslation } from 'react-i18next'
 import { Link } from 'react-router'
 import { formatTime, greeting } from '@/lib/format'
 import { DriverCard } from './driver-card'
-import { minutes, yourStopName } from './trip-text'
+import { minutes, namesList, yourStopName } from './trip-text'
 
 // The yellow banner at the top of Home: a greeting, when the bus arrives and,
-// while the bus is on its way, who is driving it.
+// while the bus is on its way, who is driving it. Works with the full trip
+// or the low-data status: both give `trip.bus`, `trip.riders` and a summary.
 export function TripHero({ parentName, trip, summary, now }) {
+  const { t } = useTranslation()
   const hello = `${greeting(now)}, ${parentName.split(' ')[0]}`
 
   if (!trip) {
     return (
-      <HeroFrame eyebrow="No trips today" title={hello}>
-        <p>Your children are not on a bus today.</p>
+      <HeroFrame eyebrow={t('No trips today')} title={hello}>
+        <p>{t('Your children are not on a bus today.')}</p>
       </HeroFrame>
     )
   }
 
-  const { eyebrow, message, eta } = heroContent(trip, summary)
+  const { eyebrow, message, eta } = heroContent(trip, summary, t)
   const isOnRoute = summary.phase === 'coming' || summary.phase === 'to-school'
 
   return (
@@ -26,11 +29,11 @@ export function TripHero({ parentName, trip, summary, now }) {
       {/* The driver shows only while the bus is on the route (FR-2.6).
           `dark` switches the theme inside this black strip so the driver
           card's text and border read well on it. */}
-      {isOnRoute && (
+      {isOnRoute && trip.bus.driver && (
         <DriverCard
           driver={trip.bus.driver}
           bus={trip.bus}
-          run="Morning pickup"
+          run={trip.trip.name}
           className="dark mt-2 max-w-xl rounded-2xl bg-sidebar p-3 text-foreground"
         />
       )}
@@ -38,68 +41,82 @@ export function TripHero({ parentName, trip, summary, now }) {
   )
 }
 
-function heroContent(trip, summary) {
+function heroContent(trip, summary, t) {
   const bus = trip.bus.number
-  const riders = trip.riders.join(' and ')
-  const stop = <strong className="font-bold">{yourStopName(summary)}</strong>
+  const riders = namesList(trip.riders, t)
+  const stop = <strong className="font-bold" />
+  const stopName = yourStopName(summary)
   const atStop = formatTime(summary.yourStop.arrivesAt)
   const atSchool = formatTime(summary.school.arrivesAt)
 
   switch (summary.phase) {
     case 'not-started':
       return {
-        eyebrow: `${bus} · starts at ${formatTime(summary.firstStop.arrivesAt)}`,
+        eyebrow: t('{{bus}} · starts at {{time}}', {
+          bus,
+          time: formatTime(summary.firstStop.arrivesAt),
+        }),
         message: (
-          <>
-            The bus is planned at {stop} at {atStop}. We will tell you when it
-            sets off.
-          </>
+          <Trans
+            t={t}
+            i18nKey="The bus is planned at <stop>{{stop}}</stop> at {{time}}. We will tell you when it sets off."
+            values={{ stop: stopName, time: atStop }}
+            components={{ stop }}
+          />
         ),
-        eta: { label: 'Planned at your stop', time: atStop },
+        eta: { label: t('Planned at your stop'), time: atStop },
       }
     case 'coming': {
       // Ask the children to be ready two minutes before the bus arrives.
       const readyBy = new Date(summary.yourStop.arrivesAt - 2 * 60_000)
       return {
-        eyebrow: `${bus} · on its way`,
+        eyebrow: t('{{bus}} · on its way', { bus }),
         message: (
-          <>
-            The bus reaches {stop} in about {minutes(summary.minutesAway)}.{' '}
-            {riders} should be at the stop by {formatTime(readyBy)}.
-          </>
+          <Trans
+            t={t}
+            i18nKey="The bus reaches <stop>{{stop}}</stop> in about {{minutes}}. {{riders}} should be at the stop by {{time}}."
+            values={{
+              stop: stopName,
+              minutes: minutes(summary.minutesAway, t),
+              riders,
+              time: formatTime(readyBy),
+            }}
+            components={{ stop }}
+          />
         ),
         eta: {
-          label: 'ETA at your stop',
+          label: t('ETA at your stop'),
           time: atStop,
-          detail: `${summary.stopsAway} ${summary.stopsAway === 1 ? 'stop' : 'stops'} away`,
+          detail: t('{{count}} stops away', { count: summary.stopsAway }),
         },
       }
     }
     case 'to-school':
       return {
-        eyebrow: `${bus} · on the way to school`,
-        message: (
-          <>
-            {riders} {trip.riders.length > 1 ? 'are' : 'is'} on the bus. It
-            reaches {summary.school.name} at about {atSchool}.
-          </>
+        eyebrow: t('{{bus}} · on the way to school', { bus }),
+        message: t(
+          trip.riders.length > 1
+            ? '{{riders}} are on the bus. It reaches {{school}} at about {{time}}.'
+            : '{{riders}} is on the bus. It reaches {{school}} at about {{time}}.',
+          { riders, school: summary.school.name, time: atSchool },
         ),
-        eta: { label: 'ETA at school', time: atSchool },
+        eta: { label: t('ETA at school'), time: atSchool },
       }
     default:
       return {
-        eyebrow: `${bus} · at school`,
-        message: (
-          <>
-            {riders} reached {summary.school.name} at {atSchool}.
-          </>
-        ),
+        eyebrow: t('{{bus}} · at school', { bus }),
+        message: t('{{riders}} reached {{school}} at {{time}}.', {
+          riders,
+          school: summary.school.name,
+          time: atSchool,
+        }),
         eta: null,
       }
   }
 }
 
 function HeroFrame({ eyebrow, title, eta, children }) {
+  const { t } = useTranslation()
   return (
     <section className="flex flex-wrap items-center justify-between gap-6 rounded-3xl bg-primary p-6 text-primary-foreground sm:p-8">
       <div className="flex min-w-0 flex-[1_1_380px] flex-col gap-3">
@@ -132,7 +149,7 @@ function HeroFrame({ eyebrow, title, eta, children }) {
             className="flex items-center gap-2 rounded-full bg-primary px-5 py-3 font-bold text-primary-foreground hover:bg-primary/90"
           >
             <MapIcon className="size-5" aria-hidden="true" />
-            Track the bus
+            {t('Track the bus')}
           </Link>
         </div>
       )}

@@ -11,9 +11,11 @@ import {
   resetPasswordSchema,
 } from '@/lib/validation/auth-schemas'
 import { resetPassword } from '@/services/auth-service'
+import { useTranslation } from 'react-i18next'
 
 // Opened from the link in the password reset email.
 export function ResetPasswordPage() {
+  const { t } = useTranslation()
   const navigate = useNavigate()
   const {
     register,
@@ -23,8 +25,8 @@ export function ResetPasswordPage() {
 
   async function onSubmit(values) {
     await resetPassword(values)
-    toast.success('Password changed', {
-      description: 'Log in with your new password.',
+    toast.success(t('Password changed'), {
+      description: t('Log in with your new password.'),
     })
     navigate('/login')
   }
@@ -35,12 +37,15 @@ export function ResetPasswordPage() {
       noValidate
       className="flex flex-col gap-6"
     >
-      <PageHeader eyebrow="Password" title="Choose a new password" />
+      <PageHeader eyebrow={t('Password')} title={t('Choose a new password')} />
 
       <FormField
         id="password"
-        label="New password"
-        hint={`At least ${PASSWORD_MIN_LENGTH} characters, with a letter, a number and a special character.`}
+        label={t('New password')}
+        hint={t(
+          'At least {{count}} characters, with a letter, a number and a special character.',
+          { count: PASSWORD_MIN_LENGTH },
+        )}
         error={errors.password?.message}
       >
         {(field) => (
@@ -54,7 +59,7 @@ export function ResetPasswordPage() {
 
       <FormField
         id="confirmPassword"
-        label="Repeat new password"
+        label={t('Repeat new password')}
         error={errors.confirmPassword?.message}
       >
         {(field) => (
@@ -66,8 +71,8 @@ export function ResetPasswordPage() {
         )}
       </FormField>
 
-      <SubmitButton isSubmitting={isSubmitting} busyLabel="Saving…">
-        Save new password
+      <SubmitButton isSubmitting={isSubmitting} busyLabel={t('Saving…')}>
+        {t('Save new password')}
       </SubmitButton>
     </form>
   )

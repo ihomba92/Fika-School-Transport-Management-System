@@ -27,7 +27,7 @@ const students = [
     guardian: { name: 'Lucy Kariuki', phone: '+254790331864' },
     morningBusId: null,
     eveningBusId: null,
-    isWaiting: true,
+    stage: 'needs-route',
     fees: { status: 'paid' },
   },
 ]
@@ -49,9 +49,9 @@ describe('filterStudents', () => {
     ])
   })
 
-  it('filters by plan, bus, waiting and fees together', () => {
+  it('filters by plan, bus, needing a route and fees together', () => {
     expect(names({ plan: 'morning' })).toEqual(['Baraka Mwangi'])
-    expect(names({ bus: 'waiting' })).toEqual(['Amani Kariuki'])
+    expect(names({ bus: 'needs-route' })).toEqual(['Amani Kariuki'])
     expect(names({ bus: 'bus-03', fees: 'overdue' })).toEqual(['Baraka Mwangi'])
   })
 })

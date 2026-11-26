@@ -30,7 +30,7 @@ export function FleetDriverCard({ driver, runName }) {
       </div>
       <div className="mt-auto flex flex-col gap-1 rounded-2xl bg-muted/60 p-3 text-sm">
         <span className="font-mono text-[10px] font-semibold tracking-[0.08em] text-muted-foreground uppercase">
-          This {runName}
+          The {runName}
         </span>
         {driver.now ? (
           <span className="font-semibold">

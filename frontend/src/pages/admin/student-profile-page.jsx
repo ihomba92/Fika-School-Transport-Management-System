@@ -4,6 +4,7 @@ import { Link, useParams } from 'react-router'
 import { toast } from 'sonner'
 import { PlanBadge } from '@/components/admin/plan-badge'
 import { StudentFeeBadge } from '@/components/admin/student-fee-badge'
+import { StudentTodayCard } from '@/components/admin/student-today-card'
 import { Card } from '@/components/common/card'
 import { LoadError } from '@/components/common/load-error'
 import { PageLoading } from '@/components/common/page-loading'
@@ -51,7 +52,9 @@ export function AdminStudentProfilePage() {
         />
         <div className="flex flex-col gap-2">
           <p className="font-mono text-[11px] font-semibold tracking-[0.08em] text-muted-foreground uppercase">
-            Student
+            {student.stage === 'needs-route'
+              ? 'Student · accepted, needs a route'
+              : 'Student'}
           </p>
           <h1 className="font-heading text-3xl font-extrabold tracking-tight">
             {student.name}
@@ -101,6 +104,11 @@ export function AdminStudentProfilePage() {
         </div>
 
         <aside className="flex flex-col gap-6">
+          <StudentTodayCard
+            student={student}
+            today={profile.data.today}
+            onChanged={profile.reload}
+          />
           <Card className="flex flex-col gap-3 p-6">
             <h2 className="font-heading text-lg font-bold">
               Parent / guardian
@@ -173,11 +181,12 @@ function FeesCard({ student }) {
   )
 }
 
-const RUN_LABELS = { morning: 'Morning pickup', evening: 'Evening drop-off' }
+const RUN_LABELS = { morning: 'Pickup', evening: 'Drop-off' }
 
-// Choose a route and a bus for each run in the student's plan. A bus that
-// is full on that run can't be chosen (FR-3.5); the service checks again,
-// as the server will.
+// Choose a route and a bus for each run in the student's plan. The trip
+// time comes from their grade (Schedule › Trip times). A bus that is full
+// on that trip can't be chosen (FR-3.5); the service checks again, as the
+// server will.
 function AssignForm({ student, options, onSaved }) {
   const plan = PLANS[student.plan]
   const runs = ['morning', 'evening'].filter((run) =>
@@ -234,6 +243,8 @@ function AssignForm({ student, options, onSaved }) {
         <RunChoice
           key={run}
           run={run}
+          trip={student[`${run}Trip`]}
+          grade={student.grade}
           value={choice[run]}
           savedBusId={student[`${run}BusId`]}
           options={options}
@@ -259,16 +270,32 @@ function AssignForm({ student, options, onSaved }) {
 const selectClass =
   'h-12 w-full min-w-0 rounded-xl border bg-card px-3 outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50'
 
-function RunChoice({ run, value, savedBusId, options, onChange }) {
+function RunChoice({ run, trip, grade, value, savedBusId, options, onChange }) {
   const { routeOptions, busOptions, shifts, week } = options
   const route = routeOptions.find((r) => r.id === value.routeId)
   const bus = busOptions.find((b) => b.id === value.busId)
   const days =
-    route && bus ? daysOnRoute(shifts, week, run, bus.id, route.id) : null
+    trip && route && bus
+      ? daysOnRoute(shifts, week, trip.id, bus.id, route.id)
+      : null
 
   return (
     <fieldset className="flex flex-col gap-3">
-      <legend className="mb-2 text-sm font-semibold">{RUN_LABELS[run]}</legend>
+      <legend className="mb-2 text-sm font-semibold">
+        {RUN_LABELS[run]}
+        {trip ? (
+          <span className="font-normal text-muted-foreground">
+            {' '}
+            · {trip.name}, <span className="font-mono">{trip.time}</span>
+          </span>
+        ) : (
+          <span className="font-normal text-warning">
+            {' '}
+            · no {run === 'morning' ? 'pickup' : 'drop-off'} time covers {grade}{' '}
+            yet
+          </span>
+        )}
+      </legend>
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <label htmlFor={`${run}-route`} className="flex flex-col gap-2">
           <span className="text-sm text-muted-foreground">Route</span>
@@ -296,7 +323,7 @@ function RunChoice({ run, value, savedBusId, options, onChange }) {
           >
             <option value="">No bus</option>
             {busOptions.map((b) => {
-              const used = b.load[run]
+              const used = trip ? (b.load[trip.id] ?? 0) : 0
               const isFull = used >= b.seats && b.id !== savedBusId
               return (
                 <option key={b.id} value={b.id} disabled={isFull}>
@@ -313,8 +340,9 @@ function RunChoice({ run, value, savedBusId, options, onChange }) {
           role="status"
           className="rounded-xl bg-warning-soft px-4 py-3 text-sm font-medium text-warning"
         >
-          This week {bus.number} is on the {route.name} on {days} of{' '}
-          {week.length} {run}s. Check the schedule.
+          This week {bus.number} is on the {route.name} for the{' '}
+          {trip.name.toLowerCase()} on {days} of {week.length} days. Check the
+          schedule.
         </p>
       )}
     </fieldset>

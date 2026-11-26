@@ -18,6 +18,7 @@ import { usePolling } from '@/hooks/use-polling'
 import { useWakeLock } from '@/hooks/use-wake-lock'
 import { MARK_LABELS } from '@/lib/trip-run'
 import { endTrip, getActiveTrip, markRider } from '@/services/driver-service'
+import { useTranslation } from 'react-i18next'
 
 const TRIP_POLL_MS = 10_000
 
@@ -52,11 +53,16 @@ export function DriverTripPage() {
 }
 
 function ActiveTrip({ trip, location, screen, refresh }) {
+  const { t } = useTranslation()
   const navigate = useNavigate()
   const [savingRiderId, setSavingRiderId] = useState(null)
-  const { name } = TRIP_KINDS[trip.kind]
+  const { name } = trip
   const doneMark = MARK_LABELS[trip.kind].done
-  const ridersHere = trip.nextStop.riders
+  // On a drop-off, children who aren't on the bus (absent this morning, or
+  // not here at boarding) are already marked and aren't listed.
+  const ridersHere = trip.nextStop.riders.filter(
+    (rider) => !rider.mark?.isLocked,
+  )
   const markedHere = ridersHere.filter((rider) => rider.mark).length
 
   async function mark(rider, value) {
@@ -71,13 +77,13 @@ function ActiveTrip({ trip, location, screen, refresh }) {
         (other) => other.id !== rider.id && !other.mark,
       )
       if (value && othersLeft.length === 0) {
-        toast.success(`${streetName(trip.nextStop)} done`, {
-          description: `${rider.name}: ${value === 'absent' ? 'absent' : TRIP_KINDS[trip.kind].doneVerb}`,
-          action: { label: 'Undo', onClick: () => undo(rider) },
+        toast.success(t('{{stop}} done', { stop: streetName(trip.nextStop) }), {
+          description: `${rider.name}: ${t(value === 'absent' ? 'Absent' : TRIP_KINDS[trip.kind].markLabel)}`,
+          action: { label: t('Undo'), onClick: () => undo(rider) },
         })
       }
     } catch (error) {
-      toast.error(error.message)
+      toast.error(t(error.message))
     } finally {
       setSavingRiderId(null)
     }
@@ -88,20 +94,20 @@ function ActiveTrip({ trip, location, screen, refresh }) {
       await markRider(trip.id, rider.id, null)
       refresh()
     } catch (error) {
-      toast.error(error.message)
+      toast.error(t(error.message))
     }
   }
 
   async function end() {
     try {
       await endTrip(trip.id)
-      toast.success(`${name} ended`, {
-        description: 'Location sharing has stopped.',
+      toast.success(t('{{trip}} ended', { trip: name }), {
+        description: t('Location sharing has stopped.'),
       })
       navigate('/driver')
       return true
     } catch (error) {
-      toast.error(error.message)
+      toast.error(t(error.message))
       return false
     }
   }
@@ -110,8 +116,12 @@ function ActiveTrip({ trip, location, screen, refresh }) {
     <div className="flex flex-col gap-6">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <PageHeader
-          eyebrow={`${name} · ${trip.markedCount} of ${trip.riderCount} marked`}
-          title="Active trip"
+          eyebrow={t('{{trip}} · {{marked}} of {{total}} marked', {
+            trip: name,
+            marked: trip.markedCount,
+            total: trip.riderCount,
+          })}
+          title={t('Active trip')}
         />
         <div className="flex flex-wrap gap-2">
           <a
@@ -119,7 +129,7 @@ function ActiveTrip({ trip, location, screen, refresh }) {
             className="flex h-12 items-center gap-2 rounded-full border bg-card px-5 font-semibold hover:bg-muted"
           >
             <Phone className="size-4" aria-hidden="true" />
-            Call school office
+            {t('Call school office')}
           </a>
           <EndTripButton trip={trip} onEnd={end} />
         </div>
@@ -133,10 +143,13 @@ function ActiveTrip({ trip, location, screen, refresh }) {
             <Card className="flex flex-col gap-4 p-5">
               <div className="flex items-baseline justify-between gap-3">
                 <h2 className="font-heading text-lg font-bold">
-                  Students at this stop
+                  {t('Students at this stop')}
                 </h2>
                 <span className="font-mono text-xs text-muted-foreground">
-                  {markedHere} of {ridersHere.length} marked
+                  {t('{{marked}} of {{total}} marked', {
+                    marked: markedHere,
+                    total: ridersHere.length,
+                  })}
                 </span>
               </div>
               <ul className="flex flex-col gap-3">
@@ -172,18 +185,21 @@ function ActiveTrip({ trip, location, screen, refresh }) {
 }
 
 function NoActiveTrip() {
+  const { t } = useTranslation()
   return (
     <div className="flex flex-col gap-6">
-      <PageHeader eyebrow="Driving" title="Active trip" />
+      <PageHeader eyebrow={t('Driving')} title={t('Active trip')} />
       <Card className="flex flex-col items-start gap-4 p-6">
         <p className="text-muted-foreground">
-          No trip is running. Start one from Today when you are ready to leave.
+          {t(
+            'No trip is running. Start one from Today when you are ready to leave.',
+          )}
         </p>
         <Link
           to="/driver"
           className="rounded-full bg-primary px-5 py-3 font-bold text-primary-foreground"
         >
-          Go to Today
+          {t('Go to Today')}
         </Link>
       </Card>
     </div>

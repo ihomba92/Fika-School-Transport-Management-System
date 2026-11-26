@@ -3,10 +3,12 @@
 // route and its students are the same records the parent and driver screens
 // use. The other students are made up from name lists, with a fixed seed so
 // the sample is the same every time.
+import { addDays } from '@/lib/dates'
 import { planFee, splitIntoInstalments } from '@/lib/fees'
-import { schoolWeek, shiftId, RUNS } from '@/lib/shifts'
+import { schoolWeek, shiftId } from '@/lib/shifts'
 import { CURRENT_TERM_ID, TERMS } from './fee-settings'
 import { RIDERS } from './sample-riders'
+import { SAMPLE_TRIP_TIMES } from './trip-times'
 import {
   BUSES,
   DRIVERS,
@@ -366,8 +368,15 @@ const routeIdFor = (name) =>
 //   buses     id, number, plate, seats
 //   drivers   id, name, phone, licence, photoUrl
 //   routes    id, name, stops (morning order, with times)
-//   shifts    id, date, run, busId, driverId, routeId
-//   students  …, morningRouteId, morningBusId, eveningRouteId, eveningBusId
+//   tripTimes id, name, run, time, firstGrade, lastGrade
+//   shifts    id, date, tripId, busId, driverId, routeId
+//   students  …, stage, morningRouteId, morningBusId, eveningRouteId,
+//             eveningBusId
+// A student's `stage` is where they are in joining the bus service:
+//   'applied'      a parent added them; the office hasn't decided yet
+//   'needs-route'  accepted, waiting for the office to choose a route
+//   'on-route'     placed on a route and bus (billed from `joinedOn`)
+//   'declined'     the office turned the application down (`declineReason`)
 function buildFleet() {
   const buses = []
   const drivers = []
@@ -401,6 +410,7 @@ function buildFleet() {
           morningBusId: 'bus-03',
           eveningRouteId: rider.eveningStopId ? route.id : null,
           eveningBusId: rider.eveningStopId ? 'bus-03' : null,
+          stage: 'on-route',
           // Baraka owes KES 2,500 (as on the parent screens); Zawadi paid half.
           paidShare:
             rider.id === 'baraka' ? 2 / 3 : rider.id === 'zawadi' ? 0.5 : 1,
@@ -432,14 +442,19 @@ function buildFleet() {
     const pickupStops = stops.slice(0, -1)
     for (let n = 0; n < line.riders; n += 1) {
       const stop = pickupStops[n % pickupStops.length]
-      students.push(
-        makeStudent(`${line.id}-st${n + 1}`, stop, { routeId, busId: line.id }),
-      )
+      students.push({
+        ...makeStudent(`${line.id}-st${n + 1}`, stop, {
+          routeId,
+          busId: line.id,
+        }),
+        stage: 'on-route',
+      })
     }
   }
 
   // Students whose parents added them but who have no route or bus yet
-  // (FR-2.4).
+  // (FR-2.4). The Kileleshwa children were accepted last week and need a
+  // route; the Ruaka children's applications arrived this week.
   const waiting = [
     ...Array.from({ length: 6 }, (_, n) => [
       'Kileleshwa',
@@ -472,7 +487,18 @@ function buildFleet() {
       plan: 'both',
       // Not on a bus yet, so no fee is due (fees start once assigned).
       paidShare: 1,
-      isWaiting: true,
+      ...(area === 'Ruaka'
+        ? {
+            stage: 'applied',
+            application: { submittedOn: addDays(SAMPLE_DATE, n - 9) },
+          }
+        : {
+            stage: 'needs-route',
+            application: {
+              submittedOn: addDays(SAMPLE_DATE, -9 - n),
+              decidedOn: addDays(SAMPLE_DATE, -6),
+            },
+          }),
     })
   }
 
@@ -480,6 +506,7 @@ function buildFleet() {
     buses,
     drivers,
     routes,
+    tripTimes: SAMPLE_TRIP_TIMES,
     shifts: weekOfShifts(plan),
     ...withPayments(students),
   }
@@ -513,7 +540,7 @@ function withPayments(students) {
   }
 
   const kept = students.map(({ paidShare, ...student }) => {
-    if (student.isWaiting) return student
+    if (student.stage !== 'on-route') return student
     const fee = planFee(term.fee, student.plan)
     let left = Math.round((fee * paidShare) / 50) * 50
     for (const { dueDate, amount } of splitIntoInstalments(
@@ -548,19 +575,20 @@ function receiptCode() {
   return code
 }
 
-// The week's shifts: each bus with its planned driver and route, morning
-// and evening. On Thursday morning Mary is off, so Joseph drives Bus 01.
+// The week's shifts: each bus with its planned driver and route, at every
+// trip time. On Thursday morning Mary is off, so Joseph drives Bus 01 on
+// both pickups.
 function weekOfShifts(plan) {
   const thursday = schoolWeek(SAMPLE_DATE)[3]
   return schoolWeek(SAMPLE_DATE).flatMap((date) =>
-    RUNS.flatMap((run) =>
+    SAMPLE_TRIP_TIMES.flatMap((trip) =>
       plan.map(({ busId, driverId, routeId }) => {
         const isMaryOff =
-          date === thursday && run === 'morning' && busId === 'bus-01'
+          date === thursday && trip.run === 'morning' && busId === 'bus-01'
         return {
-          id: shiftId(date, run, busId),
+          id: shiftId(date, trip.id, busId),
           date,
-          run,
+          tripId: trip.id,
           busId,
           driverId: isMaryOff ? 'driver-08' : driverId,
           routeId,

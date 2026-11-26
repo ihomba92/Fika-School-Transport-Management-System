@@ -12,10 +12,12 @@ import { completeProfileSchema } from '@/lib/validation/auth-schemas'
 import { useFinishSignIn } from '@/hooks/use-finish-sign-in'
 import { firstName } from '@/lib/format'
 import { completeProfile } from '@/services/auth-service'
+import { useTranslation } from 'react-i18next'
 
 // Shown after a parent signs up with Google: Google doesn't give us a phone number,
 // and consent must be given in Fika itself.
 export function CompleteProfilePage() {
+  const { t } = useTranslation()
   const finishSignIn = useFinishSignIn()
   const { state } = useLocation()
   const {
@@ -30,9 +32,10 @@ export function CompleteProfilePage() {
 
   async function onSubmit(values) {
     const login = await completeProfile({ ...values, email: state?.email })
-    toast.success(`Welcome to Fika, ${firstName(login.user.name)}`, {
-      description: 'Your profile is complete.',
-    })
+    toast.success(
+      t('Welcome to Fika, {{name}}', { name: firstName(login.user.name) }),
+      { description: t('Your profile is complete.') },
+    )
     finishSignIn(login)
   }
 
@@ -43,15 +46,22 @@ export function CompleteProfilePage() {
       className="flex flex-col gap-6"
     >
       <PageHeader
-        eyebrow="Step 2 of 2"
-        title="Complete your profile"
-        description={`You signed in with Google${state?.email ? ` as ${state.email}` : ''}. Two more details and you are in.`}
+        eyebrow={t('Step 2 of 2')}
+        title={t('Complete your profile')}
+        description={
+          state?.email
+            ? t(
+                'You signed in with Google as {{email}}. Two more details and you are in.',
+                { email: state.email },
+              )
+            : t('You signed in with Google. Two more details and you are in.')
+        }
       />
 
       <FormField
         id="fullName"
-        label="Full name"
-        hint="From your Google account. You can change it."
+        label={t('Full name')}
+        hint={t('From your Google account. You can change it.')}
         error={errors.fullName?.message}
       >
         {(field) => (
@@ -61,8 +71,8 @@ export function CompleteProfilePage() {
 
       <FormField
         id="phone"
-        label="Phone number"
-        hint="Needed for M-Pesa payments and urgent calls from the driver."
+        label={t('Phone number')}
+        hint={t('Needed for M-Pesa payments and urgent calls from the driver.')}
         error={errors.phone?.message}
       >
         {(field) => <PhoneInput {...field} {...register('phone')} />}
@@ -70,17 +80,17 @@ export function CompleteProfilePage() {
 
       <ConsentField control={control} error={errors.consent?.message} />
 
-      <SubmitButton isSubmitting={isSubmitting} busyLabel="Saving…">
-        Finish and continue
+      <SubmitButton isSubmitting={isSubmitting} busyLabel={t('Saving…')}>
+        {t('Finish and continue')}
       </SubmitButton>
 
       <p className="text-center text-sm text-muted-foreground">
-        Not you?{' '}
+        {t('Not you?')}{' '}
         <Link
           to="/login"
           className="font-bold text-foreground underline underline-offset-2"
         >
-          Log out
+          {t('Log out')}
         </Link>
       </p>
     </form>

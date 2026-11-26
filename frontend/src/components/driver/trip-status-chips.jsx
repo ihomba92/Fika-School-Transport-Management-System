@@ -1,5 +1,6 @@
 import { MapPin, MapPinOff, Sun, SunDim } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { useTranslation } from 'react-i18next'
 
 const LOCATION = {
   sharing: { icon: MapPin, label: 'Sharing location', isOk: true },
@@ -41,6 +42,7 @@ export function TripStatusChips({ location, screen }) {
 }
 
 function Chip({ icon: Icon, label, isOk }) {
+  const { t } = useTranslation()
   return (
     <span className="flex items-center gap-1.5 rounded-full bg-sidebar px-3 py-1.5 text-xs font-semibold text-sidebar-foreground">
       <span
@@ -51,7 +53,7 @@ function Chip({ icon: Icon, label, isOk }) {
         aria-hidden="true"
       />
       <Icon className="size-3.5" aria-hidden="true" />
-      {label}
+      {t(label)}
     </span>
   )
 }

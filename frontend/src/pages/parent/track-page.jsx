@@ -1,20 +1,38 @@
+import { Suspense, lazy } from 'react'
 import { Bell, Bus, Check, Clock, MapPin } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { Card } from '@/components/common/card'
 import { LoadError } from '@/components/common/load-error'
 import { PageLoading } from '@/components/common/page-loading'
 import { PageHeader } from '@/components/layout/page-header'
-import { TripMap } from '@/components/map/trip-map'
 import { DriverCard } from '@/components/parent/driver-card'
-import { minutes, yourStopName } from '@/components/parent/trip-text'
+import { LowDataSwitch } from '@/components/parent/low-data-switch'
+import { minutes, namesList, yourStopName } from '@/components/parent/trip-text'
+import { TripTextView } from '@/components/parent/trip-text-view'
 import { useClock } from '@/hooks/use-clock'
-import { TRIP_POLL_MS, useMorningTrip } from '@/hooks/use-morning-trip'
+import { useLowData } from '@/hooks/use-low-data'
+import {
+  TRIP_POLL_MS,
+  useMorningTrip,
+  useTripStatus,
+} from '@/hooks/use-morning-trip'
 import { formatTime } from '@/lib/format'
 import { summarizeTrip, tripTimeline } from '@/lib/trip-summary'
 import { cn } from '@/lib/utils'
 
+// The map code (Leaflet) loads only when the map is shown, so low-data mode
+// never downloads it.
+const TripMap = lazy(() =>
+  import('@/components/map/trip-map').then((m) => ({ default: m.TripMap })),
+)
+
 export function ParentTrackPage() {
-  const { data: trip, error, isLoaded } = useMorningTrip()
+  const { t } = useTranslation()
+  const lowData = useLowData()
+  const full = useMorningTrip({ enabled: !lowData.isOn })
+  const status = useTripStatus({ enabled: lowData.isOn })
   const now = useClock()
+  const { data: trip, error, isLoaded } = lowData.isOn ? status : full
 
   if (!isLoaded && !error) return <PageLoading label="Loading the map" />
   if (!isLoaded) {
@@ -25,45 +43,82 @@ export function ParentTrackPage() {
   if (!trip) {
     return (
       <PageHeader
-        eyebrow="Track the bus"
-        title="No trip to track"
-        description="Your children are not on a bus today."
+        eyebrow={t('Track the bus')}
+        title={t('No trip to track')}
+        description={t('Your children are not on a bus today.')}
       />
     )
   }
 
-  const summary = summarizeTrip(trip, now)
+  const summary = lowData.isOn ? trip.summary : summarizeTrip(trip, now)
   const isCarrying = summary.phase === 'coming' || summary.phase === 'to-school'
   const secondsAgo = Math.max(0, Math.round((now - trip.updatedAt) / 1000))
 
-  return (
-    <div className="flex flex-col gap-6">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <PageHeader
-          eyebrow={isCarrying ? 'Morning pickup · Live' : 'Morning pickup'}
-          title="Track the bus"
-          description={`You see ${trip.bus.number} only while it is carrying ${trip.riders.join(' or ')}.`}
-        />
-        {isCarrying && (
+  const header = (
+    <div className="flex flex-wrap items-end justify-between gap-3">
+      <PageHeader
+        eyebrow={
+          isCarrying
+            ? t('{{trip}} · Live', { trip: trip.trip.name })
+            : trip.trip.name
+        }
+        title={t('Track the bus')}
+        description={t(
+          'You see {{bus}} only while it is carrying {{riders}}.',
+          {
+            bus: trip.bus.number,
+            riders: namesList(trip.riders, t),
+          },
+        )}
+      />
+      <div className="flex flex-col items-end gap-2">
+        <LowDataSwitch />
+        {isCarrying && !lowData.isOn && (
           <p className="font-mono text-xs text-muted-foreground">
-            Updated {secondsAgo} s ago · refreshes every {TRIP_POLL_MS / 1000} s
+            {t('Updated {{seconds}} s ago · refreshes every {{every}} s', {
+              seconds: secondsAgo,
+              every: TRIP_POLL_MS / 1000,
+            })}
           </p>
         )}
       </div>
+    </div>
+  )
+
+  if (lowData.isOn) {
+    return (
+      <div className="flex max-w-2xl flex-col gap-6">
+        {header}
+        <TripTextView status={trip} now={now} onRefresh={status.refresh} />
+      </div>
+    )
+  }
+
+  return (
+    <div className="flex flex-col gap-6">
+      {header}
 
       <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[minmax(0,1fr)_380px]">
         <Card className="relative overflow-hidden">
-          <TripMap
-            trip={trip}
-            showBus={isCarrying}
-            busDetail={
-              summary.phase === 'coming'
-                ? `${minutes(summary.minutesAway)} to you`
-                : 'to school'
-            }
-            yourStopLabel={`Your stop · ${formatTime(summary.yourStop.arrivesAt)}`}
-            className="h-[420px] lg:h-[640px]"
-          />
+          <Suspense
+            fallback={<div className="h-[420px] bg-muted lg:h-[640px]" />}
+          >
+            <TripMap
+              trip={trip}
+              showBus={isCarrying}
+              busDetail={
+                summary.phase === 'coming'
+                  ? t('{{minutes}} to you', {
+                      minutes: minutes(summary.minutesAway, t),
+                    })
+                  : t('to school')
+              }
+              yourStopLabel={t('Your stop · {{time}}', {
+                time: formatTime(summary.yourStop.arrivesAt),
+              })}
+              className="h-[420px] lg:h-[640px]"
+            />
+          </Suspense>
           <EtaChip summary={summary} />
         </Card>
 
@@ -74,20 +129,25 @@ export function ParentTrackPage() {
 }
 
 function EtaChip({ summary }) {
+  const { t } = useTranslation()
   const content = {
     'not-started': [
-      'Not started',
-      `Leaves at ${formatTime(summary.firstStop.arrivesAt)}`,
+      t('Not started'),
+      t('Leaves at {{time}}', {
+        time: formatTime(summary.firstStop.arrivesAt),
+      }),
     ],
     coming: [
-      `${minutes(summary.minutesAway)} away`,
-      `${summary.stopsAway} ${summary.stopsAway === 1 ? 'stop' : 'stops'} before yours`,
+      t('{{minutes}} away', { minutes: minutes(summary.minutesAway, t) }),
+      t('{{count}} stops before yours', { count: summary.stopsAway }),
     ],
     'to-school': [
-      'Picked up',
-      `At school about ${formatTime(summary.school.arrivesAt)}`,
+      t('Picked up'),
+      t('At school about {{time}}', {
+        time: formatTime(summary.school.arrivesAt),
+      }),
     ],
-    'at-school': ['At school', 'Tracking resumes for the evening trip'],
+    'at-school': [t('At school'), t('Tracking resumes for the evening trip')],
   }[summary.phase]
 
   return (
@@ -109,6 +169,7 @@ function EtaChip({ summary }) {
 }
 
 function TripPanel({ trip, summary }) {
+  const { t } = useTranslation()
   return (
     <Card as="aside" className="flex flex-col overflow-hidden">
       {/* `dark` switches the theme inside this black header, so the driver
@@ -132,14 +193,17 @@ function TripPanel({ trip, summary }) {
           />
         )}
         <div className="grid grid-cols-2 gap-3">
-          <EtaTile label="At your stop" time={summary.yourStop.arrivesAt} />
-          <EtaTile label="At school" time={summary.school.arrivesAt} />
+          <EtaTile
+            label={t('At your stop')}
+            time={summary.yourStop.arrivesAt}
+          />
+          <EtaTile label={t('At school')} time={summary.school.arrivesAt} />
         </div>
       </div>
 
       <div className="flex flex-col gap-2 p-5">
         <h3 className="font-mono text-[11px] font-semibold tracking-[0.08em] text-muted-foreground uppercase">
-          Trip so far
+          {t('Trip so far')}
         </h3>
         <ol className="flex flex-col gap-1">
           {tripTimeline(trip).map((row) => (
@@ -155,8 +219,9 @@ function TripPanel({ trip, summary }) {
 
       <p className="flex gap-2 border-t p-5 text-sm text-muted-foreground">
         <Bell className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
-        You will get a notification when the driver marks your children picked
-        up.
+        {t(
+          'You will get a notification when the driver marks your children picked up.',
+        )}
       </p>
     </Card>
   )
@@ -176,7 +241,8 @@ function EtaTile({ label, time }) {
 }
 
 function TimelineRow({ row, trip, summary }) {
-  const { title, detail } = timelineText(row, trip, summary)
+  const { t } = useTranslation()
+  const { title, detail } = timelineText(row, trip, summary, t)
   return (
     <li
       className={cn(
@@ -199,33 +265,35 @@ function TimelineRow({ row, trip, summary }) {
 }
 
 // The words for one row of "Trip so far".
-function timelineText({ stop, state, isYours }, trip, summary) {
-  const riders = trip.riders.join(' and ')
+function timelineText({ stop, state, isYours }, trip, summary, t) {
+  const riders = namesList(trip.riders, t)
   if (stop.id === summary.firstStop.id) {
     return {
-      title: state === 'passed' ? 'Trip started' : 'Trip starts',
+      title: state === 'passed' ? t('Trip started') : t('Trip starts'),
       detail: stop.name,
     }
   }
   if (isYours) {
     return {
-      title: `Your stop · ${yourStopName(summary)}`,
-      detail: state === 'passed' ? `Picked up ${riders}` : riders,
+      title: t('Your stop · {{stop}}', { stop: yourStopName(summary) }),
+      detail:
+        state === 'passed' ? t('Picked up {{riders}}', { riders }) : riders,
     }
   }
   if (stop.id === summary.school.id) {
     return { title: stop.name, detail: trip.school.detail }
   }
-  const status = { passed: 'Passed', next: 'Next stop', coming: '' }
+  const status = { passed: t('Passed'), next: t('Next stop'), coming: '' }
   return { title: stop.name, detail: status[state] }
 }
 
 function StopDot({ state, isYours }) {
+  const { t } = useTranslation()
   if (state === 'passed') {
     return (
       <span className="grid size-7 shrink-0 place-items-center rounded-full bg-sidebar text-primary">
         <Check className="size-4" aria-hidden="true" />
-        <span className="sr-only">Passed</span>
+        <span className="sr-only">{t('Passed')}</span>
       </span>
     )
   }

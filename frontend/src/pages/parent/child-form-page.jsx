@@ -12,6 +12,7 @@ import { planFee } from '@/lib/fees'
 import { firstName, formatAmount } from '@/lib/format'
 import { EMPTY_PLACE } from '@/lib/validation/child-schema'
 import { getChild, getCurrentTerm, saveChild } from '@/services/parent-service'
+import { useTranslation } from 'react-i18next'
 
 const NEW_CHILD = {
   fullName: '',
@@ -25,6 +26,7 @@ const NEW_CHILD = {
 
 // Used for both /parent/children/new and /parent/children/:childId/edit.
 export function ParentChildFormPage() {
+  const { t } = useTranslation()
   const { childId } = useParams()
   const navigate = useNavigate()
   const isEditing = Boolean(childId)
@@ -49,11 +51,16 @@ export function ParentChildFormPage() {
     const child = await saveChild(values, childId)
     const name = firstName(child.name)
     toast.success(
-      isEditing ? `${name}'s details are saved` : `${name} is added`,
+      isEditing
+        ? t("{{name}}'s details are saved", { name })
+        : t('{{name}} is added', { name }),
       {
         description: isEditing
-          ? 'The transport office sees the change straight away.'
-          : 'We will tell you when the school assigns a bus.',
+          ? t('The transport office sees the change straight away.')
+          : t(
+              'The transport office will review it and tell you when {{name}} is accepted.',
+              { name },
+            ),
       },
     )
     navigate('/parent/children')
@@ -62,19 +69,25 @@ export function ParentChildFormPage() {
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
-        eyebrow="Children"
-        title={isEditing ? `Edit ${defaultValues.fullName}` : 'Add a child'}
+        eyebrow={t('Children')}
+        title={
+          isEditing
+            ? t('Edit {{name}}', { name: defaultValues.fullName })
+            : t('Add a child')
+        }
         description={
           isEditing
-            ? 'You can change the plan or locations at most once a month.'
-            : 'The school assigns a bus once you save. We will tell you the bus number and driver.'
+            ? t('You can change the plan or locations at most once a month.')
+            : t(
+                'The transport office reviews your application, then chooses a bus. We will tell you the bus number and driver.',
+              )
         }
       />
       <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
         <ChildForm
           defaultValues={defaultValues}
           termFee={term.fee}
-          submitLabel={isEditing ? 'Save changes' : 'Save child'}
+          submitLabel={isEditing ? t('Save changes') : t('Save child')}
           onSave={save}
         />
         <aside className="flex flex-col gap-4">
@@ -109,22 +122,26 @@ function toFormValues(child) {
 }
 
 const NEXT_STEPS = [
-  'The transport office places your child on the nearest bus with space.',
+  'The transport office reviews your application and accepts your child.',
+  'They place your child on the nearest bus with space.',
   "You get a notification with the bus number and driver's name.",
   'On school days you can follow the bus live and see when it will reach your stop.',
 ]
 
 function WhatHappensNext() {
+  const { t } = useTranslation()
   return (
     <section className="flex flex-col gap-4 rounded-3xl bg-sidebar p-6 text-sidebar-foreground">
-      <h2 className="font-heading text-lg font-bold">What happens next</h2>
+      <h2 className="font-heading text-lg font-bold">
+        {t('What happens next')}
+      </h2>
       <ol className="flex flex-col gap-3">
         {NEXT_STEPS.map((step, index) => (
           <li key={step} className="flex gap-3 text-sm">
             <span className="grid size-6 shrink-0 place-items-center rounded-full bg-primary text-xs font-bold text-primary-foreground">
               {index + 1}
             </span>
-            {step}
+            {t(step)}
           </li>
         ))}
       </ol>
@@ -133,22 +150,28 @@ function WhatHappensNext() {
 }
 
 function FeesNote({ term }) {
+  const { t } = useTranslation()
   return (
     <Card className="flex flex-col gap-3 p-6">
-      <h2 className="font-heading text-lg font-bold">Fees for {term.name}</h2>
+      <h2 className="font-heading text-lg font-bold">
+        {t('Fees for {{term}}', { term: term.name })}
+      </h2>
       <dl className="flex flex-col gap-1.5 text-sm">
         {Object.entries(PLANS).map(([id, plan]) => (
           <div key={id} className="flex justify-between gap-3">
-            <dt className="text-muted-foreground">{plan.label}</dt>
+            <dt className="text-muted-foreground">{t(plan.label)}</dt>
             <dd className="font-mono font-semibold">
-              KES {formatAmount(planFee(term.fee, id))}
+              {t('KES {{amount}}', {
+                amount: formatAmount(planFee(term.fee, id)),
+              })}
             </dd>
           </div>
         ))}
       </dl>
       <p className="text-sm text-muted-foreground">
-        Paid in advance by the 1st of each month: in thirds in Terms 1 and 2, in
-        halves in Term 3.
+        {t(
+          'Paid in advance by the 1st of each month: in thirds in Terms 1 and 2, in halves in Term 3.',
+        )}
       </p>
     </Card>
   )

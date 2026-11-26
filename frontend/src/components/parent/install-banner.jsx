@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Bus, Download, Share, X } from 'lucide-react'
 import { Card } from '@/components/common/card'
 import { useInstallPrompt } from '@/hooks/use-install-prompt'
+import { Trans, useTranslation } from 'react-i18next'
 
 const DISMISSED_KEY = 'fika-install-dismissed'
 
@@ -16,6 +17,7 @@ function wasDismissed() {
 // Invites parents to install Fika. Installed apps get push notifications,
 // and on iPhone notifications only work after installing.
 export function InstallBanner() {
+  const { t } = useTranslation()
   const { canInstall, isIphone, isInstalled, install } = useInstallPrompt()
   const [isDismissed, setIsDismissed] = useState(wasDismissed)
 
@@ -32,18 +34,26 @@ export function InstallBanner() {
         <Bus className="size-6" aria-hidden="true" />
       </span>
       <div className="flex min-w-0 flex-[1_1_260px] flex-col gap-0.5">
-        <h2 className="font-semibold">Install Fika on your phone</h2>
+        <h2 className="font-semibold">{t('Install Fika on your phone')}</h2>
         <p className="text-sm text-muted-foreground">
           {isIphone ? (
-            <>
-              In Safari, tap{' '}
-              <Share className="inline size-4 align-text-bottom" />{' '}
-              <span className="sr-only">Share</span> then{' '}
-              <strong>Add to Home Screen</strong>. Bus and payment alerts only
-              work on iPhone after you install.
-            </>
+            <Trans
+              t={t}
+              i18nKey="In Safari, tap <share/> then <strong>Add to Home Screen</strong>. Bus and payment alerts only work on iPhone after you install."
+              components={{
+                share: (
+                  <>
+                    <Share className="inline size-4 align-text-bottom" />
+                    <span className="sr-only">{t('Share')}</span>
+                  </>
+                ),
+                strong: <strong />,
+              }}
+            />
           ) : (
-            'Open it from your home screen like an app and get bus and payment alerts.'
+            t(
+              'Open it from your home screen like an app and get bus and payment alerts.',
+            )
           )}
         </p>
       </div>
@@ -55,14 +65,14 @@ export function InstallBanner() {
             className="flex items-center gap-2 rounded-full bg-primary px-4 py-2.5 text-sm font-bold text-primary-foreground hover:bg-primary/90"
           >
             <Download className="size-4" aria-hidden="true" />
-            Install app
+            {t('Install app')}
           </button>
         )}
         <button
           type="button"
           onClick={dismiss}
-          aria-label="Dismiss"
-          title="Dismiss"
+          aria-label={t('Dismiss')}
+          title={t('Dismiss')}
           className="grid size-10 place-items-center rounded-full border hover:bg-muted"
         >
           <X className="size-4" aria-hidden="true" />

@@ -60,6 +60,13 @@ This folder is the **React front end**. It is complete and runs on its own using
 | JetBrains Mono Variable | Labels, codes, times and receipts. |
 | Montserrat Variable (upright and italic) | The public landing page only. |
 
+### Languages
+
+| Tool | Version | What it does here |
+|---|---|---|
+| [i18next](https://www.i18next.com) + [react-i18next](https://react.i18next.com) | 27 / 18 | English and Kiswahili. `t('Track the bus')` in components; the Kiswahili lives in `src/i18n/locales/sw.json`. |
+| [i18next-resources-to-backend](https://github.com/i18next/i18next-resources-to-backend) | 1 | Downloads the Kiswahili file only when someone chooses Kiswahili. |
+
 ### Forms, validation and maps
 
 | Tool | Version | What it does here |
@@ -72,7 +79,7 @@ This folder is the **React front end**. It is complete and runs on its own using
 
 | Tool | Version | What it does here |
 |---|---|---|
-| [Vitest](https://vitest.dev) | 5.1 | Unit tests (157 tests in 26 files). |
+| [Vitest](https://vitest.dev) | 5.1 | Unit tests (180 tests in 33 files). |
 | [Testing Library](https://testing-library.com) + jsdom | — | Installed for component tests. |
 | [Oxlint](https://oxc.rs) | 1.90 | Linting (`npm run lint`), including React Hooks and fast-refresh rules. |
 | [Prettier](https://prettier.io) + prettier-plugin-tailwindcss | 3.10 | Formatting: no semicolons, single quotes, Tailwind classes sorted. |
@@ -80,7 +87,7 @@ This folder is the **React front end**. It is complete and runs on its own using
 
 ### Browser APIs used
 
-Geolocation (`watchPosition`) for the driver's location sharing, Screen Wake Lock to keep the driver's screen on, `beforeinstallprompt` for "Install app", IntersectionObserver and Page Visibility for pausing animations, `matchMedia` for screen size and reduced motion, and the File API for photo uploads.
+Network Information (`navigator.connection`: Data Saver and 2G) for low-data mode, Geolocation (`watchPosition`) for the driver's location sharing, Screen Wake Lock to keep the driver's screen on, `beforeinstallprompt` for "Install app", IntersectionObserver and Page Visibility for pausing animations, `matchMedia` for screen size and reduced motion, and the File API for photo uploads.
 
 ---
 
@@ -157,6 +164,7 @@ frontend/
     ├── index.css           Tailwind import and theme tokens (light and dark)
     ├── app/router.jsx      Every web address, per role
     ├── auth/               JWT session (AuthProvider), RequireRole guard
+    ├── i18n/               English / Kiswahili setup; locales/sw.json holds the Kiswahili
     ├── config/             Navigation menus per role, transport plans, grades
     ├── data/               Sample data for the mock services (goes with the back end)
     ├── services/           One file per area; the only place that "talks to the server"
@@ -190,11 +198,15 @@ frontend/
 
 **Routing.** Each role has its own area (`/admin`, `/driver`, `/parent`) inside `AppLayout` (sidebar on desktop, menu on phones). Sign-in screens sit inside `AuthLayout`, whose black panel shows the bus-stop animation. Every page is lazy-loaded.
 
-**State in the address.** Filters and selections that people may want to share or come back to live in the URL: `?fees=overdue&bus=waiting` on Students, `?bus=bus-03` on the live map, `?route=…` on Routes, `?date=2026-10-13&run=morning` on the Schedule. Dashboard links open these screens already filtered, and Back works as expected.
+**State in the address.** Filters and selections that people may want to share or come back to live in the URL: `?fees=overdue&bus=waiting` on Students, `?bus=bus-03` on the live map, `?route=…` on Routes, `?date=2026-10-13&trip=trip-senior-pickup` on the Schedule. Dashboard links open these screens already filtered, and Back works as expected.
 
 **Live data.** The admin's live map and dashboard, and the parent's tracking screen, poll every 10 seconds (`usePolling`). The driver's phone sends its position on a steady 10‑second rhythm while a trip is running, and never otherwise.
 
 **Themes and accessibility.** Light, dark and system themes. Real buttons, links and labels; visible focus rings; text contrast of at least 4.5:1; animations hold still when the device asks for reduced motion; touch targets of at least 44 px on phones.
+
+**Languages.** Parents and drivers choose **English** or **Kiswahili** with the EN / SW switch in the top bar, or English / Kiswahili on the sign-in screens. The choice is kept on the device (the back end will keep it on the account, so notifications and SMS follow it); with no choice, a phone set to Swahili gets Kiswahili. The English sentence is the key (`t('Track the bus')`), so components stay readable and English needs a file only for plurals (`locales/en.json`). Validation messages, sign-in errors and driver errors are translated where they are shown. Dates and greetings follow the language too (*Jumanne 13 Okt 2026*, *Habari za asubuhi*). The admin screens stay in English for now. School data (trip names such as *Senior pickup*, route and stop names) is shown as the school typed it. A test (`src/i18n/i18n.test.js`) fails if any `t('…')` in the parent, driver or sign-in screens has no Kiswahili, or if a translation drops a `{{placeholder}}`. Have a native speaker review `sw.json` before launch.
+
+**Low-data mode.** On *Track the bus* and Home, **Save data** shows where the bus is in words instead of the live map: *"Bus 03: 2 stops from your stop · About 6 min to your stop"*, with the times, the driver's number and a **Refresh now** button. It turns on by itself when the phone asks to save data (Data Saver) or the connection is 2G, and the parent can switch it on or off (remembered on the device). In this mode Fika asks for a status of a few hundred bytes every 30 seconds (`getTripStatus`) instead of the full trip every 10 seconds, and never downloads the map code or tiles.
 
 **PWA.** Fika installs on a phone's home screen. Chrome and Edge get an "Install app" button; iPhone users are shown the Safari *Share → Add to Home Screen* steps.
 
@@ -225,17 +237,19 @@ frontend/
 
 ### 8.3 Admin (transport office)
 
-Menu: **Operations** (Dashboard, Live map, Schedule, Routes & assignment) · **People** (Students, Drivers & buses) · **Finance** (Payments).
+Menu: **Operations** (Dashboard, Live map, Schedule, Routes & assignment) · **People** (New applications, Students, Drivers & buses) · **Finance** (Payments).
 
 | Screen | Address | What it does |
 |---|---|---|
-| **Dashboard** | `/admin` | The morning at a glance: stat cards (buses on the road, students on board, fees), a **Needs attention** list (late buses, lost signals, unplanned shifts, accounts past the fee grace period, students waiting for a bus) with links to fix each one, and today's trips table. Refreshes every 10 s. |
+| **Dashboard** | `/admin` | The trip on now at a glance (for example *Senior pickup · 06:00*): stat cards (buses on the road, students picked up or dropped off, fees), a **Needs attention** list (a child who didn't board at school, lost signals, a shift that needs a look, accounts past the fee grace period, new applications, accepted students who need a route) with a call or link to fix each one, and the trip's buses in a table. Refreshes every 10 s. |
 | **Live map** | `/admin/live-map` | Every bus on one map with its route. Pick a bus to see its driver, route, students on board, next stop and status (on time, late, signal lost). The chosen bus is in the address, so the dashboard can link to it. |
-| **Schedule** | `/admin/schedule` | The school week of **shifts** (morning and evening, Monday to Friday), planned a week ahead and editable any time. A table of every bus: for each, choose the **driver** and the **route** for that shift. Warns when a driver is on two buses, a bus is over its seats, or students' assigned bus doesn't run their route. "Copy to the rest of the week" saves repeating a good plan. Past shifts are read-only. |
-| **Routes & assignment** | `/admin/routes` | Two parts. **Waiting students**: new students grouped by where they live, with a suggested route, bus and stop for each group (or a new route when a group is big enough), to approve or dismiss. **All routes**: each route's stops and times, its students, and which buses the schedule puts on it this shift. |
+| **Schedule** | `/admin/schedule` | The school week of **shifts**: one per **trip time** per day (for example a 06:00 senior pickup, an 08:00 junior pickup, a 14:00 junior drop-off and a 15:45 senior drop-off), planned a week ahead and editable any time. A table of every bus: for each, choose the **driver** and the **route** for that shift. Seats are counted per trip, so juniors don't take seniors' seats. Warns when a driver is on two buses in one shift, a bus is over its seats, or students' bus doesn't run their route. "Copy to the rest of the week" repeats a good plan. Past shifts are read-only. |
+| Trip times | `/admin/schedule/trip-times` | The school's pickup and drop-off times: add as many as needed, each with a name, a start time and the grades that ride it (from grade … to grade …). Each grade has exactly one pickup and one drop-off; clashes are refused and grades left without a time are flagged. A pickup starts each route at its time, keeping the route's gaps between stops; a drop-off runs the stops in reverse from its time. |
+| **Routes & assignment** | `/admin/routes` | Two parts. **Accepted students who need a route**: grouped by where they live, with a suggested route, bus and stop for each group (or a new route when a group is big enough), to approve or dismiss. **All routes**: each route's stops, its students, and which buses the schedule puts on it for the trip on now. |
 | New route / Edit route | `/admin/routes/new`, `/admin/routes/:routeId/edit` | Name the route, list its stops in morning order with a time and a pin on the map for each, and set the school arrival time. **Recalculate stop order** puts them in the shortest order and recalculates times at the route's own pace. A stop with students on it can't be removed. The evening run is the same stops in reverse from 15:45. |
-| **Students** | `/admin/students` | Every student, with search (name, grade, parent's name or phone) and filters for grade, plan, bus (including *waiting for a bus*) and fees status. Filters live in the address. **Export** downloads the filtered list as a CSV. |
-| Student profile | `/admin/students/:studentId` | One student: photo, grade, plan, pickup and drop-off points, parent contacts and fees. Here the admin sets the student's **route and bus for each run**; they stay until changed. Warns on days when the schedule doesn't put that bus on that route. A full bus can't be chosen. Shows banners when a student is flagged or removed for fees. |
+| **New applications** | `/admin/applications` | Children their parents added, before the office decides: photo, grade, plan, home, parent and the trip times their grade would ride. **Accept** makes them a student who needs a route; **Decline** needs a reason the parent will see (quick reasons offered). Declined applications can be reconsidered. These are not "waiting at the stop": that is a live status on the student's profile. |
+| **Students** | `/admin/students` | Accepted students (on a route, or needing one), with search (name, grade, parent's name or phone) and filters for grade, plan, bus (including *needs a route*) and fees status. Filters live in the address. **Export** downloads the filtered list as a CSV. |
+| Student profile | `/admin/students/:studentId` | One student: photo, grade, plan, pickup and drop-off points, parent contacts and fees. **Today** shows where they are now (waiting at their stop with the bus's due time, on the bus, at school, dropped off) or that they were absent, with **Mark present for the ride home** when a parent drove them in. Here the admin sets the student's **route and bus for each run** (their trip time comes from their grade); they stay until changed. Warns on days when the schedule doesn't put that bus on that route. A full bus can't be chosen. Shows banners when a student is flagged or removed for fees. |
 | **Drivers & buses** | `/admin/drivers` | Two independent lists: **Buses** (number, plate, seats, this shift's driver and route) and **Drivers** (photo, phone, licence, this shift's bus). Who drives what is set on the Schedule, not here. |
 | Add a bus | `/admin/drivers/buses/new` | Number plate (unique) and seats. The bus number is suggested. |
 | Add a driver | `/admin/drivers/new` | Name, email, phone, licence and a **required photo**. The driver gets a temporary password by email and must change it at first log in. Only admins create drivers or change their photos. |
@@ -248,8 +262,8 @@ Menu: Today · Active trip · Profile. Designed for a phone in a mount: big butt
 
 | Screen | Address | What it does |
 |---|---|---|
-| **Today** | `/driver` | Today's morning and evening trips: bus, route, stops and number of children, each from the schedule. A **Before you start** checklist (location allowed, phone charging, screen kept on) and one big **Start trip** button for the next trip. Shows when all trips are done. |
-| **Active trip** | `/driver/trip` | The trip in progress: the route map with the bus's position, the **next stop** card with its children and photos, and a tap to mark each child **on board** (morning) or **dropped off** (evening), with Undo. Moves to the next stop when a stop is done, shows directions, keeps the screen awake and shares location every 10 s. **End trip** checks the bus is empty and stops location sharing at once. |
+| **Today** | `/driver` | Today's trips from the schedule, one per trip time (senior pickup, junior pickup, junior drop-off, senior drop-off): bus, route, stops and number of children. **Boarding at school**: before a drop-off leaves, a card with every child's photo, name and grade to check them **On board** or **Not here** (the office is told at once); a child absent at their morning pickup shows as absent and can't be marked. The drop-off can start only when everyone is checked. A **Before you start** checklist and one big button for the next trip. |
+| **Active trip** | `/driver/trip` | The trip in progress: the route map with the bus's position, the **next stop** card with its children and photos, and a tap to mark each child **picked up** / **dropped off** or **absent**, with Undo. An absence at pickup lasts the whole day; on the drop-off, absent and not-boarded children are already marked and stops with only them are skipped. Shows directions, keeps the screen awake and shares location every 10 s. **End trip** checks the bus is empty and stops location sharing at once. |
 | **Profile** | `/driver/profile` | The driver's details and this shift's bus (number, plate, route). The **phone number** is the one thing a driver can change; the office is told. |
 
 ### 8.5 Parent
@@ -258,9 +272,9 @@ Menu: Home · Track the bus · Children · Payments · Notifications (bell in th
 
 | Screen | Address | What it does |
 |---|---|---|
-| **Home** | `/parent` | Each child's status today (waiting for pickup, on the bus, at school, home), the bus and driver card (photo, name, bus plate, route), fees due, and an **Install Fika** prompt. A new parent sees how to add a first child. |
-| **Track the bus** | `/parent/track` | During a run: the bus on the map, minutes to your stop, "Next stop is yours", and the trip so far (picked up, at school, dropped off). Shows "No trip to track" outside runs, because location is only shared during trips. |
-| **Children** | `/parent/children` | The family's children with plan, grade, stops and assigned bus, or "waiting for the school to assign a bus". |
+| **Home** | `/parent` | In **Save data** mode, the live map is replaced by the trip in words. Each child's status today (waiting for pickup, on the bus, at school, home), the bus and driver card (photo, name, bus plate, route), fees due, and an **Install Fika** prompt. A new parent sees how to add a first child. |
+| **Track the bus** | `/parent/track` | A **Save data** switch: text instead of the map (on by itself on slow connections). During a run: the bus on the map, minutes to your stop, "Next stop is yours", and the trip so far (picked up, at school, dropped off). Shows "No trip to track" outside runs, because location is only shared during trips. |
+| **Children** | `/parent/children` | The family's children with plan, grade, stops, bus times for their grade (e.g. *06:00 pickup · 15:45 drop-off*), and where a new child stands: application sent, accepted and waiting for a route, or declined with the office's reason. |
 | Add / Edit child | `/parent/children/new`, `/parent/children/:childId/edit` | Name, grade, photo, transport plan (**both ways**, **morning only** or **evening only**; one-way plans pay half), and pickup and drop-off points picked on a map. The plan or locations can be changed at most once a month. |
 | **Payments** | `/parent/payments` | What each child owes this term, instalment due dates, and payment history. **Pay with M‑Pesa** sends an STK push to the parent's phone ("Waiting for your PIN…") and shows the result. |
 | **Notifications** | `/parent/notifications` | Everything Fika has told this parent: pickups, drop-offs, payment receipts, reminders and school messages. Mark all as read. (Push and email copies come with the back end.) |
@@ -271,10 +285,13 @@ Menu: Home · Track the bus · Children · Payments · Notifications (bell in th
 
 These live in `src/lib/` and are covered by unit tests:
 
-- **No standing links between buses, drivers and routes.** They are put together per **shift** (one date + morning or evening) on the Schedule. A driver can be on only one bus per shift; one route can have several buses.
+- **Trip times** are set by the admin: any number of pickups and drop-offs, each covering a range of grades. Every grade has one pickup and one drop-off, so small children can come later and go home earlier.
+- **No standing links between buses, drivers and routes.** They are put together per **shift** (one date + one trip time) on the Schedule. A driver can be on only one bus per shift, but can drive several shifts a day; one route can have several buses.
 - **Students** keep a route and bus **per run** until the admin changes them. The schedule warns when a student's bus isn't running their route that shift.
-- **Evening runs** use the morning stops in reverse, starting 15:45, keeping the same gaps between stops.
-- **Placement**: waiting students are grouped by distance (within 1.5 km); a group of 15 or more is offered its own bus; a stop more than 1 km from home is flagged.
+- **Runs** keep each route's gaps between stops: a pickup starts at its trip time; a drop-off runs the stops in reverse from its trip time.
+- **New students**: *applied* → accepted (*needs a route*) → *on a route*, or *declined* with a reason. Fees start only once they are on a bus.
+- **Placement**: accepted students are grouped by distance (within 1.5 km); a group of 15 or more is offered its own bus; a stop more than 1 km from home is flagged. Seats are checked per trip time.
+- **Attendance**: a child marked absent at pickup is absent for the rest of the day (boarding check and drop-off) unless the office marks them present; a child missing at boarding is flagged on the admin dashboard.
 - **Fees**: three terms a year; the fee is paid in instalments; one-way plans pay half; a student who joins mid-term gets 7 days before their first due date; overdue accounts get a **3-day grace period** before being flagged; removal for fees always needs confirmation.
 - **Privacy**: location is shared only between Start trip and End trip; children's photos are seen only by their parents, their driver and the office; only the office sets drivers' photos.
 
@@ -283,7 +300,7 @@ These live in `src/lib/` and are covered by unit tests:
 ## 10. Testing and code quality
 
 ```bash
-npm test          # 157 unit tests
+npm test          # 180 unit tests
 npm run lint      # Oxlint
 npm run build     # must build without errors
 ```
@@ -333,11 +350,11 @@ The plan for the Flask API:
 
 **Product**
 
-- **Swahili** as a second language (react-i18next), as many parents and drivers may prefer it.
+- **Kiswahili for the admin screens**, and a native speaker's review of `sw.json`.
 - **Admin roles**: separate permissions for the finance office and the transport office.
 - **Reports**: monthly on-time performance, bus occupancy and fee collection, exportable as PDF.
 - **Driver–office messaging** for breakdowns and delays, so the office can update parents from one place.
-- **Low-data mode** for parents: a text-only tracking view ("Bus is 2 stops away") that works on slow connections.
+- **SMS** for parents with no data at all (Africa's Talking): "Bus 03 is 2 stops from your stop", opt-in.
 
 ---
 
