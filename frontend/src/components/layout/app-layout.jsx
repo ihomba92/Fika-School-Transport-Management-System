@@ -27,7 +27,7 @@ export function AppLayout({ role }) {
       <Sidebar
         navigation={navigation}
         homePath={homePath}
-        className="hidden lg:flex"
+        className="hidden lg:flex print:hidden"
       />
 
       {isMenuOpen && (
@@ -49,6 +49,7 @@ export function AppLayout({ role }) {
 
       <div className="flex min-w-0 flex-1 flex-col">
         <Topbar
+          className="print:hidden"
           roleLabel={navigation.label}
           homePath={homePath}
           notificationsPath={navigation.notificationsPath}

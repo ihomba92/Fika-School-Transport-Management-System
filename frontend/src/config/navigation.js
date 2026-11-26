@@ -1,6 +1,7 @@
 import {
   Bell,
   CalendarDays,
+  ChartColumn,
   IdCard,
   Inbox,
   UserRound,
@@ -43,7 +44,10 @@ export const NAVIGATION = {
       },
       {
         title: 'Finance',
-        items: [{ to: '/admin/payments', label: 'Payments', icon: Wallet }],
+        items: [
+          { to: '/admin/payments', label: 'Payments', icon: Wallet },
+          { to: '/admin/reports', label: 'Reports', icon: ChartColumn },
+        ],
       },
     ],
   },
