@@ -344,7 +344,12 @@ function makeStudent(id, stop, { routeId, busId }) {
       name: `${pick(ADULT_NAMES)} ${lastName}`,
       phone: phoneNumber(),
     },
-    pickup: { address: stop.name.split(' · ')[1], stopId: stop.id },
+    pickup: {
+      address: stop.name.split(' · ')[1],
+      landmark: '',
+      position: stop.position,
+      stopId: stop.id,
+    },
     morningRouteId: plan === 'evening' ? null : routeId,
     morningBusId: plan === 'evening' ? null : busId,
     eveningRouteId: plan === 'morning' ? null : routeId,
@@ -404,6 +409,9 @@ function buildFleet() {
           guardian: rider.guardian,
           pickup: {
             address: stopName(route, rider.morningStopId),
+            landmark: '',
+            position: route.stops.find((s) => s.id === rider.morningStopId)
+              .position,
             stopId: rider.morningStopId,
           },
           morningRouteId: route.id,
@@ -478,6 +486,7 @@ function buildFleet() {
       // Homes a few hundred metres apart around the area's centre.
       pickup: {
         address: `${area}, Nairobi`,
+        landmark: '',
         stopId: null,
         position: [
           position[0] + ((n % 3) - 1) * 0.0035,

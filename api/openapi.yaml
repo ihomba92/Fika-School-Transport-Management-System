@@ -1,0 +1,3065 @@
+openapi: 3.1.0
+info:
+  title: Fika API
+  version: 0.1.0
+  summary: The contract between the Fika front end and the Flask back end.
+  contact:
+    name: David Ihomba Kibandi
+    email: davidihomba@gmail.com
+  description: |
+    Every function in `frontend/src/services/` has an endpoint here, with
+    the same name in `operationId`, so each mock function can be swapped
+    for one request without touching the pages. The mocks are the
+    reference: when this file and a mock disagree, fix one of them.
+
+    ## Conventions
+
+    - **Base URL**: `/api/v1`. The front end reads it from `VITE_API_URL`.
+    - **JSON keys are camelCase**, as the front end uses them. Flask
+      models can stay snake_case; convert at the edge (Marshmallow
+      `data_key`, or one helper).
+    - **Dates** are `YYYY-MM-DD` strings in Nairobi time (`2026-10-12`).
+      **Clock times** are `HH:MM`, 24-hour, Nairobi time (`06:45`).
+      **Instants** (`format: date-time`) are ISO 8601 with an offset
+      (`2026-10-12T06:52:00+03:00`). The front end's request helper
+      turns the instant fields into `Date` objects, because the screens
+      compare and subtract them.
+    - **Positions** are `[latitude, longitude]` pairs.
+    - **Money** is whole Kenyan shillings (integers). No cents.
+    - **Phone numbers** are stored and sent as `+2547XXXXXXXX` or
+      `+2541XXXXXXXX`. The forms already normalise them.
+    - **"Nothing to show"** answers `204 No Content`. The service turns
+      that into `null` (no trip running, no trip today).
+    - **Language**: the request helper sends `Accept-Language: en` or
+      `sw` (the parent's or driver's choice). Text the server writes for
+      people to read, such as notifications, comes back in that language.
+      The choice is also saved with `PATCH /me`, so emails, SMS and push
+      notifications use it too. Admin text is English.
+    - **Photos** are uploaded as `multipart/form-data` (JPEG, PNG or
+      WebP, up to 5 MB). Responses give the saved photo's URL in
+      `photoUrl`.
+
+    ## Signing in
+
+    `POST /auth/login` returns a short-lived **access token** (JWT, 15
+    minutes) and a **refresh token** (30 days). Every other request sends
+    `Authorization: Bearer <accessToken>`. When a request answers `401`
+    with code `TOKEN_EXPIRED`, the front end calls `POST /auth/refresh`
+    once and repeats the request; if that fails too, it signs the person
+    out. Each role has its own path prefix (`/parent`, `/driver`,
+    `/admin`) and the server checks the token's role on every request
+    (`403 WRONG_ROLE` otherwise). A parent or driver only ever sees their
+    own family or their own bus: the server filters by the signed-in
+    account, never by ids sent from the browser.
+
+    ## Errors
+
+    Every error has the same body:
+
+    ```json
+    { "error": { "code": "BUS_FULL", "message": "Bus 03 is full on the senior pickup (33 seats).", "fields": null } }
+    ```
+
+    - `code` is stable and in capitals; the front end may branch on it.
+    - `message` is the English sentence the screen shows. **For parents,
+      drivers and the sign-in screens the message is also the Kiswahili
+      translation key** (`src/i18n/locales/sw.json`), so the server must
+      send these sentences exactly as written in this file. Admin
+      messages are English only and may include names and numbers.
+    - `fields` is only set on `422 VALIDATION`: a map from the field's
+      path (`pickup.address`, `stops.2.time`) to the same messages the
+      front end's Zod schemas use (`src/lib/validation/`). The server
+      checks everything again, whatever the browser sends.
+
+    | Status | When |
+    |---|---|
+    | 400 `BAD_REQUEST` | The body isn't valid JSON or misses required keys |
+    | 401 `UNAUTHENTICATED` / `TOKEN_EXPIRED` / `INVALID_CREDENTIALS` | No token, an expired one, or a wrong email or password |
+    | 403 `WRONG_ROLE` / `EMAIL_NOT_VERIFIED` | Signed in, but not allowed |
+    | 404 `NOT_FOUND` | The id doesn't exist **or belongs to someone else** (never 403, so ids can't be probed) |
+    | 409 `CONFLICT`-type codes | The request is valid but the current state forbids it (a full bus, a trip already running, an application already handled) |
+    | 422 `VALIDATION` | A field is wrong; see `fields` |
+    | 429 `RATE_LIMITED` | Too many sign-in or payment attempts |
+    | 502 `MPESA_UNAVAILABLE` | Safaricom didn't answer |
+
+    ## Rules the server must share with the front end
+
+    Several answers are worked out with rules that already exist, with
+    tests, in `frontend/src/lib/`. Port them to Python with the same test
+    cases, so both sides agree:
+
+    | Rule | Front-end source |
+    |---|---|
+    | Fee status, instalments, grace period, new-student days | `lib/fees.js` |
+    | Which trip time a grade rides; overlapping trip times | `lib/trip-times.js` |
+    | Stops of a run, shift checks, copying a shift, past shifts | `lib/shifts.js` |
+    | A driver's trip: next stop, counts, everyone marked | `lib/trip-run.js` |
+    | Live status of a bus (on time, late, no signal, arrived) | `lib/bus-status.js` |
+    | Low-data trip summary | `lib/trip-summary.js` |
+    | Grouping waiting students, placement options, route fit | `lib/grouping.js`, `lib/route-fit.js` |
+    | Student search and filters | `lib/student-filters.js` |
+    | Monthly report figures | `lib/reports.js` |
+
+    ## Changes the front end needs when it switches to this API
+
+    These are the places where the mock takes a shortcut the real API
+    can't:
+
+    1. **M-Pesa** is asynchronous: `payWithMpesa` posts the request
+       (`202`), then polls `GET /parent/payments/mpesa/{checkoutRequestId}`
+       every 3 s until it isn't `pending` (give up after 90 s). It must
+       also send the `phone` the form already collects.
+    2. **Google sign-in** sends Google's ID token (`credential`) to
+       `POST /auth/google`. When the account is new, the answer carries a
+       `signupToken`, and `completeProfile` sends that instead of the
+       email.
+    3. **Password reset** sends the `token` from the emailed link
+       (`/reset-password?token=…`) with the new password.
+    4. **Email verification** links point at the API
+       (`GET /auth/verify-email?token=…`), which redirects to `/login`
+       or to `/link-expired`.
+    5. **Student lists** get `morningRoute` / `eveningRoute` as
+       `{ id, name }` only; no screen uses their stops.
+    6. **Instants** arrive as strings; the request helper turns the
+       `date-time` fields into `Date` objects.
+servers:
+  - url: http://localhost:5000/api/v1
+    description: Flask on your computer
+  - url: https://api.fika.example/api/v1
+    description: Production (to be decided)
+security:
+  - bearer: []
+tags:
+  - name: Auth
+    description: Sign-up, sign-in and passwords (`auth-service.js`). Public.
+  - name: Parent
+    description: The parent app (`parent-service.js`). Role `parent`.
+  - name: Driver
+    description: The driver app (`driver-service.js`). Role `driver`.
+  - name: Admin · Today
+    description: Dashboard, live map and students (`admin-service.js`). Role `admin`.
+  - name: Admin · Fleet
+    description: Buses, drivers, schedule, trip times, routes and placement (`fleet-service.js`). Role `admin`.
+  - name: Admin · Payments
+    description: Fees, reminders and term settings (`payments-service.js`). Role `admin`.
+  - name: Admin · Reports
+    description: Monthly reports (`reports-service.js`). Role `admin`.
+  - name: M-Pesa
+    description: Called by Safaricom, not by the front end.
+
+paths:
+  # ── Auth ──────────────────────────────────────────────────────────────
+  /auth/login:
+    post:
+      tags: [Auth]
+      operationId: logIn
+      summary: Log in with email and password
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email: { type: string, format: email, examples: [parent@example.com] }
+                password: { type: string }
+      responses:
+        '200':
+          description: Signed in.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/LoginResponse' }
+        '401':
+          description: |
+            `INVALID_CREDENTIALS`: "Email or password is incorrect." The
+            same message for an unknown email, so nobody can find out
+            which emails have accounts.
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+        '403':
+          description: |
+            `EMAIL_NOT_VERIFIED`: "Confirm your email first. We sent you a
+            link when you signed up."
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+        '429': { $ref: '#/components/responses/RateLimited' }
+
+  /auth/signup:
+    post:
+      tags: [Auth]
+      operationId: signUp
+      summary: Create a parent account
+      description: |
+        Only parents sign up; the office creates driver accounts. The
+        server sends a verification email and the account can't log in
+        until the link is opened. The consent is stored with the date and
+        the version of the Terms and Privacy notice (`LEGAL_UPDATED`).
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [fullName, phone, email, password, consent]
+              properties:
+                fullName: { $ref: '#/components/schemas/PersonName' }
+                phone: { $ref: '#/components/schemas/Phone' }
+                email: { type: string, format: email }
+                password: { $ref: '#/components/schemas/NewPassword' }
+                consent: { type: boolean, const: true }
+      responses:
+        '201':
+          description: Account created; a verification email was sent.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [email]
+                properties:
+                  email: { type: string, format: email }
+        '409':
+          description: |
+            `EMAIL_TAKEN`: "An account with this email already exists. Try
+            logging in."
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+        '422': { $ref: '#/components/responses/Validation' }
+
+  /auth/verify-email:
+    get:
+      tags: [Auth]
+      operationId: verifyEmail
+      summary: Open the link from the verification email
+      description: |
+        Opened by the parent's browser, not called by the front end.
+        Redirects to `/login?verified=1`, or to `/link-expired` when the
+        token is wrong, used or older than 24 hours.
+      security: []
+      parameters:
+        - { name: token, in: query, required: true, schema: { type: string } }
+      responses:
+        '302': { description: Redirect to the front end. }
+
+  /auth/resend-verification:
+    post:
+      tags: [Auth]
+      operationId: resendVerificationEmail
+      summary: Send the verification email again
+      description: Always `204`, whether or not the email has an account.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email: { type: string, format: email }
+      responses:
+        '204': { description: "Sent, if the account exists and isn't verified." }
+        '429': { $ref: '#/components/responses/RateLimited' }
+
+  /auth/google:
+    post:
+      tags: [Auth]
+      operationId: continueWithGoogle
+      summary: Sign in or sign up with Google
+      description: |
+        The front end gets an ID token from Google Identity Services and
+        sends it here. The server checks it with Google. A known email
+        signs in; a new one gets a `signupToken` (valid 30 minutes) for
+        `POST /auth/complete-profile`.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [credential]
+              properties:
+                credential: { type: string, description: Google's ID token (JWT). }
+      responses:
+        '200':
+          description: Either signed in, or a new account that needs a phone number and consent.
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/LoginResponse'
+                  - type: object
+                    required: [needsProfile, email, name, signupToken]
+                    properties:
+                      needsProfile: { type: boolean, const: true }
+                      email: { type: string, format: email }
+                      name: { type: string }
+                      signupToken: { type: string }
+        '401':
+          description: '`INVALID_GOOGLE_TOKEN`: "We could not sign you in with Google. Try again."'
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+
+  /auth/complete-profile:
+    post:
+      tags: [Auth]
+      operationId: completeProfile
+      summary: Finish a Google sign-up
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [signupToken, fullName, phone, consent]
+              properties:
+                signupToken: { type: string }
+                fullName: { $ref: '#/components/schemas/PersonName' }
+                phone: { $ref: '#/components/schemas/Phone' }
+                consent: { type: boolean, const: true }
+      responses:
+        '201':
+          description: Parent account created and signed in (Google already verified the email).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/LoginResponse' }
+        '401':
+          description: '`SIGNUP_EXPIRED`: "This link has expired. Start again with Google."'
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+        '422': { $ref: '#/components/responses/Validation' }
+
+  /auth/forgot-password:
+    post:
+      tags: [Auth]
+      operationId: requestPasswordReset
+      summary: Email a password-reset link
+      description: |
+        Always `204`, so nobody can find out which emails have accounts.
+        The link (`/reset-password?token=…`) works once, for 1 hour.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email: { type: string, format: email }
+      responses:
+        '204': { description: 'Sent, if the account exists.' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+
+  /auth/reset-password:
+    post:
+      tags: [Auth]
+      operationId: resetPassword
+      summary: Set a new password from the emailed link
+      description: Signs the account out everywhere (all refresh tokens are revoked).
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token, password]
+              properties:
+                token: { type: string }
+                password: { $ref: '#/components/schemas/NewPassword' }
+      responses:
+        '204': { description: Password changed; the page goes to log in. }
+        '400':
+          description: '`LINK_EXPIRED`: the front end opens `/link-expired`.'
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+        '422': { $ref: '#/components/responses/Validation' }
+
+  /auth/refresh:
+    post:
+      tags: [Auth]
+      operationId: refreshToken
+      summary: Get a new access token
+      description: Called by the request helper, not by a page. The refresh token is rotated.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [refreshToken]
+              properties:
+                refreshToken: { type: string }
+      responses:
+        '200':
+          description: New tokens.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [accessToken, refreshToken]
+                properties:
+                  accessToken: { type: string }
+                  refreshToken: { type: string }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+
+  /auth/logout:
+    post:
+      tags: [Auth]
+      operationId: logOut
+      summary: Log out on this device
+      description: Revokes the refresh token sent. Always `204`.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                refreshToken: { type: string }
+      responses:
+        '204': { description: Logged out. }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+
+  /me:
+    get:
+      tags: [Auth]
+      operationId: getMe
+      summary: The signed-in account
+      description: Used when the app opens with a saved token, to check it still works.
+      responses:
+        '200':
+          description: The account.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/User' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+    patch:
+      tags: [Auth]
+      operationId: updateMe
+      summary: Save the account's language
+      description: Called when the person changes the EN / SW switch, so messages sent outside the app use their language.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [language]
+              properties:
+                language: { type: string, enum: [en, sw] }
+      responses:
+        '200':
+          description: The account.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/User' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+
+  # ── Parent ────────────────────────────────────────────────────────────
+  /parent/family:
+    get:
+      tags: [Parent]
+      operationId: getFamily
+      summary: Everything the parent Home page needs
+      responses:
+        '200':
+          description: The parent, the current term, their children with fees and today's run, and totals.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Family' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+
+  /parent/children:
+    post:
+      tags: [Parent]
+      operationId: createChild
+      x-service: saveChild(values)
+      summary: Add a child (an application)
+      description: |
+        A new child is an **application** (`stage: applied`). The office
+        accepts it, then places the child on a route and a bus. Fees
+        start only when the child gets a bus. The office is notified.
+        A plan without a morning run sends no `pickup`; without an
+        evening run, no `dropoff`. When the drop-off is the same place,
+        the form sends the pickup again as `dropoff`.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema: { $ref: '#/components/schemas/ChildForm' }
+            encoding:
+              pickup: { contentType: application/json }
+              dropoff: { contentType: application/json }
+      responses:
+        '201':
+          description: The child, as `GET /parent/children/{childId}` returns it.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Child' }
+        '422': { $ref: '#/components/responses/Validation' }
+
+  /parent/children/{childId}:
+    parameters:
+      - $ref: '#/components/parameters/ChildId'
+    get:
+      tags: [Parent]
+      operationId: getChild
+      summary: One of the parent's children
+      responses:
+        '200':
+          description: The child.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Child' }
+        '404':
+          description: '`NOT_FOUND`: "We could not find that child." (also for another family''s child)'
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+    put:
+      tags: [Parent]
+      operationId: updateChild
+      x-service: saveChild(values, childId)
+      summary: Change a child's details
+      description: |
+        `photo` may be a new file, or left out to keep the saved one. A
+        pickup or drop-off whose pin moved loses its `stopId` (the office
+        must give it a new stop, and is told); an unchanged pin keeps it.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema: { $ref: '#/components/schemas/ChildForm' }
+            encoding:
+              pickup: { contentType: application/json }
+              dropoff: { contentType: application/json }
+      responses:
+        '200':
+          description: The changed child.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Child' }
+        '404':
+          description: '"We could not find that child."'
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+        '422': { $ref: '#/components/responses/Validation' }
+
+  /parent/term:
+    get:
+      tags: [Parent]
+      operationId: getCurrentTerm
+      summary: The current term and its fee
+      description: For showing each plan's price in the child form (one-way plans pay half).
+      responses:
+        '200':
+          description: The term.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Term' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+
+  /parent/trip:
+    get:
+      tags: [Parent]
+      operationId: getMorningTrip
+      summary: The pickup carrying this family's children, with the bus on the map
+      description: |
+        The pickup that is on the way, else the next one today, else the
+        first. Polled every 10 seconds on the Track page. `progress` comes
+        from the driver's phone: the latest GPS position, and the last
+        stop whose students are all marked. The driver is included only
+        while the bus is on the way.
+      responses:
+        '200':
+          description: The trip.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ParentTrip' }
+        '204': { description: 'No pickup today for this family (no shift, or no child with a bus).' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+
+  /parent/trip/status:
+    get:
+      tags: [Parent]
+      operationId: getTripStatus
+      summary: The same trip in a few hundred bytes, for Save data mode
+      description: |
+        No route, positions or photos: only what the text view says.
+        Polled every 30 seconds. Rules: `lib/trip-summary.js`.
+      responses:
+        '200':
+          description: The trip summary.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TripStatus' }
+        '204': { description: No pickup today. }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+
+  /parent/payments:
+    get:
+      tags: [Parent]
+      operationId: getPayments
+      summary: This term's successful payments, newest first
+      responses:
+        '200':
+          description: The receipts.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/ParentReceipt' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+
+  /parent/payments/mpesa:
+    post:
+      tags: [Parent]
+      operationId: payWithMpesa
+      summary: Start an M-Pesa payment (STK push)
+      description: |
+        The server asks Safaricom (Daraja STK push) to show a payment
+        prompt on `phone`. The parent enters their PIN there; Fika never
+        sees it. The result arrives later at `/payments/mpesa/callback`;
+        the front end polls `GET /parent/payments/mpesa/{checkoutRequestId}`.
+        The amount can't be more than the child's balance.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [childId, amount, phone]
+              properties:
+                childId: { type: string }
+                amount: { type: integer, minimum: 10, maximum: 250000 }
+                phone: { $ref: '#/components/schemas/Phone' }
+      responses:
+        '202':
+          description: The prompt was sent to the phone.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MpesaCheckout' }
+        '404':
+          description: '"We could not find that child."'
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+        '422':
+          description: |
+            `VALIDATION`, for example `fields.amount`: "That is more than
+            the {{amount}} left to pay" (the front end fills in the amount).
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '502':
+          description: '`MPESA_UNAVAILABLE`: "M-Pesa isn''t answering right now. Try again in a few minutes."'
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+
+  /parent/payments/mpesa/{checkoutRequestId}:
+    get:
+      tags: [Parent]
+      operationId: getMpesaPayment
+      summary: How an M-Pesa payment ended
+      description: Polled every 3 seconds after `payWithMpesa`, until `status` isn't `pending`.
+      parameters:
+        - { name: checkoutRequestId, in: path, required: true, schema: { type: string } }
+      responses:
+        '200':
+          description: The payment so far.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MpesaCheckout' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /parent/notifications:
+    get:
+      tags: [Parent]
+      operationId: getNotifications
+      summary: The parent's notifications, newest first
+      responses:
+        '200':
+          description: The notifications (the last 90 days).
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Notification' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+
+  /parent/notifications/read:
+    post:
+      tags: [Parent]
+      operationId: markAllNotificationsRead
+      summary: Mark every notification read
+      responses:
+        '204': { description: Done. }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+
+  # ── Driver ────────────────────────────────────────────────────────────
+  /driver/day:
+    get:
+      tags: [Driver]
+      operationId: getDriverDay
+      summary: Everything the driver's Today page needs
+      description: |
+        Today's trips for this driver, one per shift the schedule gives
+        them (a bus with a route for one trip time), in time order.
+      responses:
+        '200':
+          description: The driver's day.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DriverDay' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+
+  /driver/trips/active:
+    get:
+      tags: [Driver]
+      operationId: getActiveTrip
+      summary: The trip being driven now
+      description: Polled every 10 seconds on the Active trip page.
+      responses:
+        '200':
+          description: The running trip.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ActiveTrip' }
+        '204': { description: No trip is running. }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+
+  /driver/trips/{tripId}/start:
+    parameters: [ { $ref: '#/components/parameters/DriverTripId' } ]
+    post:
+      tags: [Driver]
+      operationId: startTrip
+      summary: Start a trip
+      description: |
+        Only one trip can run at a time. On a drop-off, every expected
+        student must be marked at boarding first. Starting turns on
+        location sharing; parents of children on this trip are told.
+      responses:
+        '204': { description: The trip is running. }
+        '404':
+          description: '"We could not find that trip."'
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+        '409':
+          description: |
+            - `TRIP_RUNNING`: "Finish the trip you are on first."
+            - `TRIP_ENDED`: "This trip has already ended."
+            - `BOARDING_INCOMPLETE`: "Check every student at boarding first: on board or not here."
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+
+  /driver/trips/{tripId}/marks/{riderId}:
+    parameters:
+      - { $ref: '#/components/parameters/DriverTripId' }
+      - { $ref: '#/components/parameters/RiderId' }
+    put:
+      tags: [Driver]
+      operationId: markRider
+      summary: Mark a student picked up, dropped off or absent
+      description: |
+        Pickups take `picked-up` or `absent`. Drop-offs take only
+        `dropped-off`: who is on the bus was settled at the boarding check.
+        **Absent at a pickup means absent for the day**: the boarding
+        check and the drop-off show it, the parent is told, and only the
+        office can mark the student present again. Saves the mark's time.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [mark]
+              properties:
+                mark: { type: string, enum: [picked-up, dropped-off, absent] }
+      responses:
+        '204': { description: Marked. }
+        '404':
+          description: '"We could not find that trip."'
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+        '409':
+          description: |
+            - `TRIP_NOT_STARTED`: "Start the trip before marking students."
+            - `NO_ABSENT_ON_DROPOFF`: "On a drop-off, mark each child dropped off. Children who didn’t board were marked at school."
+            - `RIDER_LOCKED`: "This student isn’t on the bus today. The office can change that."
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+    delete:
+      tags: [Driver]
+      operationId: unmarkRider
+      x-service: markRider(tripId, riderId, null)
+      summary: Undo a mark made by mistake
+      description: An undone pickup absence is cleared from the day's attendance.
+      responses:
+        '204': { description: Undone. }
+        '409':
+          description: Same codes as `PUT`.
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+
+  /driver/trips/{tripId}/boarding/{riderId}:
+    parameters:
+      - { $ref: '#/components/parameters/DriverTripId' }
+      - { $ref: '#/components/parameters/RiderId' }
+    put:
+      tags: [Driver]
+      operationId: markBoarding
+      summary: Boarding check at school, before a drop-off leaves
+      description: |
+        `missing` makes the student absent for the rest of the day, and
+        the transport office sees it on its dashboard straight away.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [mark]
+              properties:
+                mark: { type: string, enum: [boarded, missing] }
+      responses:
+        '204': { description: Marked. }
+        '404':
+          description: '"We could not find that trip."'
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+        '409':
+          description: |
+            - `NOT_A_DROPOFF`: "Boarding is checked on drop-offs."
+            - `TRIP_LEFT`: "This trip has already left school."
+            - `NOT_ON_TRIP`: "This student isn’t on this trip."
+            - `ABSENT_TODAY`: "This student was absent this morning. The office can mark them present."
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+    delete:
+      tags: [Driver]
+      operationId: unmarkBoarding
+      x-service: markBoarding(tripId, riderId, null)
+      summary: Undo a boarding mark
+      responses:
+        '204': { description: Undone. }
+        '409':
+          description: Same codes as `PUT`.
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+
+  /driver/trips/{tripId}/end:
+    parameters: [ { $ref: '#/components/parameters/DriverTripId' } ]
+    post:
+      tags: [Driver]
+      operationId: endTrip
+      summary: End a trip
+      description: Allowed once every student is marked. Stops location sharing; the run is saved for the monthly reports.
+      responses:
+        '204': { description: Ended. }
+        '404':
+          description: '"We could not find that trip."'
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+        '409':
+          description: '`NOT_ALL_MARKED`: "Mark every student before ending the trip."'
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+
+  /driver/positions:
+    post:
+      tags: [Driver]
+      operationId: sendPosition
+      summary: The bus's GPS position, every 10–15 seconds during a trip
+      description: |
+        Stored against the running trip and shared only with the parents
+        of children on it and with the office. Kept 90 days. A position
+        sent with no trip running is ignored (`204`), never stored.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [position, recordedAt]
+              properties:
+                position: { $ref: '#/components/schemas/Position' }
+                accuracy: { type: number, description: 'Metres, from the phone.' }
+                recordedAt: { type: string, format: date-time }
+      responses:
+        '204': { description: Received. }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+
+  /driver/profile:
+    get:
+      tags: [Driver]
+      operationId: getDriverProfile
+      summary: The driver's details and today's bus
+      responses:
+        '200':
+          description: The profile.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [driver, bus]
+                properties:
+                  driver: { $ref: '#/components/schemas/Driver' }
+                  bus:
+                    oneOf:
+                      - $ref: '#/components/schemas/BusOnRoute'
+                      - type: 'null'
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+    patch:
+      tags: [Driver]
+      operationId: updateDriverPhone
+      summary: Change the driver's own phone number
+      description: Name, photo and licence are admin-only. The change is logged and the office is told.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [phone]
+              properties:
+                phone: { $ref: '#/components/schemas/Phone' }
+      responses:
+        '200':
+          description: The driver with the new number.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Driver' }
+        '422': { $ref: '#/components/responses/Validation' }
+
+  # ── Admin · Today ─────────────────────────────────────────────────────
+  /admin/live:
+    get:
+      tags: [Admin · Today]
+      operationId: getLiveBuses
+      summary: Every bus on the shift that is on now, with its live status
+      description: |
+        "The shift on now" is the trip time running now, else the next one
+        today (`lib/trip-times.js` `currentTrip`). Polled every 10 seconds
+        by the live map. Status rules: `lib/bus-status.js` (late from 5
+        minutes behind; no signal after 2 minutes without a position).
+      responses:
+        '200':
+          description: The live buses.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/LiveBuses' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+
+  /admin/overview:
+    get:
+      tags: [Admin · Today]
+      operationId: getAdminOverview
+      summary: Everything the dashboard needs
+      responses:
+        '200':
+          description: Today's numbers, the live buses and what needs attention.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AdminOverview' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+
+  /admin/students:
+    get:
+      tags: [Admin · Today]
+      operationId: listStudents
+      summary: Accepted students, searched and filtered
+      description: |
+        Students on a route or waiting for one (applications are on their
+        own screen). Filters as in `lib/student-filters.js`. `counts`
+        are for all accepted students, not only the ones that match.
+        The mock returns every match; the API pages them (`page`,
+        `perPage`), and `total` stays the number of accepted students.
+      parameters:
+        - { name: search, in: query, schema: { type: string }, description: 'Name, grade, guardian name or phone; spaces ignored.' }
+        - { name: grade, in: query, schema: { type: string, default: all }, description: '`all` or a grade.' }
+        - { name: plan, in: query, schema: { type: string, enum: [all, both, morning, evening], default: all } }
+        - { name: bus, in: query, schema: { type: string, default: all }, description: '`all`, `needs-route`, or a bus id (pickup or drop-off).' }
+        - { name: fees, in: query, schema: { type: string, enum: [all, paid, upcoming, overdue], default: all } }
+        - { name: page, in: query, schema: { type: integer, minimum: 1, default: 1 } }
+        - { name: perPage, in: query, schema: { type: integer, minimum: 1, maximum: 200, default: 50 } }
+      responses:
+        '200':
+          description: The matching students.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/StudentList' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+
+  /admin/students/{studentId}:
+    parameters: [ { $ref: '#/components/parameters/StudentId' } ]
+    get:
+      tags: [Admin · Today]
+      operationId: getStudent
+      summary: One student's profile
+      description: |
+        With every route and bus they could be put on (each bus's seats
+        used per trip time), this week's shifts so the page can warn when
+        a bus isn't usually on a route, and where the student is today.
+      responses:
+        '200':
+          description: The profile.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/StudentProfile' }
+        '404':
+          description: '"We could not find that student."'
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+        '409':
+          description: '`IS_APPLICATION`: "This child is an application, not a student yet. See New applications."'
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+
+  /admin/students/{studentId}/assignment:
+    parameters: [ { $ref: '#/components/parameters/StudentId' } ]
+    put:
+      tags: [Admin · Today]
+      operationId: assignStudent
+      summary: Put a student on a route and a bus for each run
+      description: |
+        A run needs both a route and a bus, or neither. A run the plan
+        doesn't include is ignored. A bus never takes more students than
+        its seats on the student's trip time. A student who gets their
+        first bus starts paying from today (`joinedOn`, 7 days for
+        anything already due). With no bus left, the student goes back to
+        `needs-route`. The parent is told.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [morning, evening]
+              properties:
+                morning: { $ref: '#/components/schemas/RunChoice' }
+                evening: { $ref: '#/components/schemas/RunChoice' }
+      responses:
+        '200':
+          description: The student, as in the list.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Student' }
+        '404':
+          description: '"We could not find that student." / "We could not find that route or bus."'
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+        '409':
+          description: |
+            - `NOT_ACCEPTED`: "Accept the application first."
+            - `BUS_FULL`: "Bus 03 is full on the senior pickup (33 seats)."
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+        '422':
+          description: '`VALIDATION`: "Choose both a route and a bus for the pickup, or neither." (or drop-off)'
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+
+  /admin/students/{studentId}/present:
+    parameters: [ { $ref: '#/components/parameters/StudentId' } ]
+    post:
+      tags: [Admin · Today]
+      operationId: markStudentPresent
+      summary: Mark a student present again for the rest of today
+      description: |
+        After an absence at pickup (a parent drove them in) or at boarding
+        (they were found). The driver's drop-off expects them again. The
+        absence stays on record with `clearedAt`.
+      responses:
+        '200':
+          description: Where the student is today.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/StudentToday' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /admin/students/{studentId}/remove-for-fees:
+    parameters: [ { $ref: '#/components/parameters/StudentId' } ]
+    post:
+      tags: [Admin · Payments]
+      operationId: removeForFees
+      summary: Take a flagged student off their buses for unpaid fees
+      description: |
+        Only for a student flagged after the grace period: nobody is taken
+        off a bus without an admin confirming. Clears both runs' route and
+        bus and sets `removedOn`. They still owe the balance. The parent
+        is told. The admin puts them back with `assignStudent`.
+      responses:
+        '200':
+          description: The student.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Student' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          description: '`NOT_FLAGGED`: "Brian Otieno is not flagged, so they can''t be removed for fees."'
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+
+  /admin/applications:
+    get:
+      tags: [Admin · Today]
+      operationId: listApplications
+      summary: Children parents added, waiting for a decision, and the declined ones
+      responses:
+        '200':
+          description: Pending (oldest first) and declined applications.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [pending, declined, needsRouteCount, today]
+                properties:
+                  pending:
+                    type: array
+                    items: { $ref: '#/components/schemas/Application' }
+                  declined:
+                    type: array
+                    items: { $ref: '#/components/schemas/Application' }
+                  needsRouteCount: { type: integer, description: Accepted students still waiting for a route. }
+                  today: { $ref: '#/components/schemas/DateKey' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+
+  /admin/applications/{studentId}/accept:
+    parameters: [ { $ref: '#/components/parameters/StudentId' } ]
+    post:
+      tags: [Admin · Today]
+      operationId: acceptApplication
+      summary: Accept a child into Fika
+      description: The child becomes a student who needs a route (`needs-route`). The parent is told. Fees start once they get a bus.
+      responses:
+        '200':
+          description: The application, now decided.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Application' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/AlreadyHandled' }
+
+  /admin/applications/{studentId}/decline:
+    parameters: [ { $ref: '#/components/parameters/StudentId' } ]
+    post:
+      tags: [Admin · Today]
+      operationId: declineApplication
+      summary: Decline an application, with a reason the parent sees
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason]
+              properties:
+                reason: { type: string, minLength: 1, maxLength: 500 }
+      responses:
+        '200':
+          description: The declined application.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Application' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/AlreadyHandled' }
+        '422':
+          description: '`VALIDATION`, `fields.reason`: "Give the parent a reason."'
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+
+  /admin/applications/{studentId}/reopen:
+    parameters: [ { $ref: '#/components/parameters/StudentId' } ]
+    post:
+      tags: [Admin · Today]
+      operationId: reopenApplication
+      summary: Put a declined application back in the list
+      responses:
+        '200':
+          description: The application, pending again.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Application' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/AlreadyHandled' }
+
+  # ── Admin · Fleet ─────────────────────────────────────────────────────
+  /admin/fleet:
+    get:
+      tags: [Admin · Fleet]
+      operationId: getFleet
+      summary: Every bus and driver, with what each does on the shift on now
+      responses:
+        '200':
+          description: The fleet.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Fleet' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+
+  /admin/buses:
+    post:
+      tags: [Admin · Fleet]
+      operationId: createBus
+      summary: Add a bus
+      description: |
+        The server gives it the next number ("Bus 05"). It is in every
+        shift from now on, with no driver or route until it is scheduled.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [plate, seats]
+              properties:
+                plate: { type: string, pattern: '^K[A-Z]{2} \d{3}[A-Z]$', examples: [KDA 482K] }
+                seats: { type: integer, minimum: 14, maximum: 70 }
+      responses:
+        '201':
+          description: The new bus.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Bus' }
+        '409':
+          description: '`PLATE_TAKEN`: "KDA 482K is already on the list as Bus 02."'
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+        '422': { $ref: '#/components/responses/Validation' }
+
+  /admin/drivers:
+    post:
+      tags: [Admin · Fleet]
+      operationId: createDriver
+      summary: Create a driver account
+      description: |
+        The photo is required (parents see it while the bus is on the way).
+        The server emails a temporary password, which the driver must
+        change at first log in.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [photo, fullName, email, phone, licence]
+              properties:
+                photo: { type: string, format: binary, contentMediaType: image/jpeg }
+                fullName: { $ref: '#/components/schemas/PersonName' }
+                email: { type: string, format: email }
+                phone: { $ref: '#/components/schemas/Phone' }
+                licence: { type: string, minLength: 5, maxLength: 20, description: Upper case. }
+      responses:
+        '201':
+          description: The new driver.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Driver' }
+        '409':
+          description: '`EMAIL_TAKEN`: "A driver with this email already exists."'
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+        '422': { $ref: '#/components/responses/Validation' }
+
+  /admin/schedule:
+    get:
+      tags: [Admin · Fleet]
+      operationId: getSchedule
+      summary: A school week of shifts, and what the screen needs to check them
+      description: |
+        One row per bus per trip time per day: the saved row, or an empty
+        one (`driverId` and `routeId` null). `past` says which shifts
+        have finished and can't be changed.
+      parameters:
+        - name: weekOf
+          in: query
+          description: Any date in the week; defaults to today.
+          schema: { $ref: '#/components/schemas/DateKey' }
+      responses:
+        '200':
+          description: The week.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Schedule' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+
+  /admin/schedule/{date}/{tripId}:
+    parameters:
+      - { name: date, in: path, required: true, schema: { $ref: '#/components/schemas/DateKey' } }
+      - { $ref: '#/components/parameters/TripTimeId' }
+    put:
+      tags: [Admin · Fleet]
+      operationId: saveShift
+      summary: Save one shift (a trip time on a day)
+      description: |
+        Replaces the shift's rows. Any shift that hasn't finished can be
+        changed, including the one running now; drivers and parents see
+        the change the next time their screen loads. Checked with
+        `checkShift` in `lib/shifts.js` (a driver on two buses, a route
+        without enough seats, …): its first error is refused.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [rows]
+              properties:
+                rows:
+                  type: array
+                  items:
+                    type: object
+                    required: [busId]
+                    properties:
+                      busId: { type: string }
+                      driverId: { type: [string, 'null'] }
+                      routeId: { type: [string, 'null'] }
+      responses:
+        '204': { description: Saved. }
+        '404':
+          description: '"We could not find that trip time." / "Unknown bus." / "Unknown driver." / "Unknown route."'
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+        '409':
+          description: |
+            - `SHIFT_FINISHED`: "That shift has finished, so it can no longer be changed."
+            - `SHIFT_INVALID`: the first error from `checkShift`.
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+
+  /admin/schedule/{date}/{tripId}/copy:
+    parameters:
+      - { name: date, in: path, required: true, schema: { $ref: '#/components/schemas/DateKey' } }
+      - { $ref: '#/components/parameters/TripTimeId' }
+    post:
+      tags: [Admin · Fleet]
+      operationId: copyShiftToRestOfWeek
+      summary: Copy a shift to the same trip time on the later days of its week
+      description: Days whose shift has already finished are skipped.
+      responses:
+        '200':
+          description: The days it was copied to.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/DateKey' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /admin/trip-times:
+    get:
+      tags: [Admin · Fleet]
+      operationId: getTripTimes
+      summary: The school's trip times, pickups first
+      responses:
+        '200':
+          description: The trip times, with how many students ride each, and grades left without a pickup or drop-off.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [trips, notes]
+                properties:
+                  trips:
+                    type: array
+                    items:
+                      allOf:
+                        - $ref: '#/components/schemas/TripTime'
+                        - type: object
+                          required: [studentCount]
+                          properties:
+                            studentCount: { type: integer }
+                  notes:
+                    type: array
+                    items: { type: string }
+                    examples: [["Grade 9 has no drop-off time."]]
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+    post:
+      tags: [Admin · Fleet]
+      operationId: createTripTime
+      x-service: saveTripTime(null, values)
+      summary: Add a trip time
+      description: A new trip time has no shifts; the admin plans its buses in the schedule.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/TripTimeForm' }
+      responses:
+        '201':
+          description: The new trip time.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TripTime' }
+        '409': { $ref: '#/components/responses/TripTimeConflict' }
+        '422': { $ref: '#/components/responses/Validation' }
+
+  /admin/trip-times/{tripId}:
+    parameters: [ { $ref: '#/components/parameters/TripTimeId' } ]
+    put:
+      tags: [Admin · Fleet]
+      operationId: updateTripTime
+      x-service: saveTripTime(tripId, values)
+      summary: Change a trip time
+      description: A trip time keeps its run (a pickup stays a pickup).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/TripTimeForm' }
+      responses:
+        '200':
+          description: The changed trip time.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TripTime' }
+        '404':
+          description: '"We could not find that trip time."'
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+        '409': { $ref: '#/components/responses/TripTimeConflict' }
+        '422': { $ref: '#/components/responses/Validation' }
+    delete:
+      tags: [Admin · Fleet]
+      operationId: deleteTripTime
+      summary: Remove a trip time and its shifts from today on
+      description: Past shifts stay as records. Children of its grades have no bus on that run until another trip time covers them.
+      responses:
+        '204': { description: Removed. }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /admin/routes:
+    get:
+      tags: [Admin · Fleet]
+      operationId: getRoutes
+      summary: Every route, with its buses on the shift on now and how well its students fit
+      responses:
+        '200':
+          description: The routes.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RoutesOverview' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+    post:
+      tags: [Admin · Fleet]
+      operationId: createRoute
+      x-service: saveRoute(null, values)
+      summary: Create a route
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RouteForm' }
+      responses:
+        '201':
+          description: The new route. The school is added as its last stop (`id` `school`).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Route' }
+        '409':
+          description: '`ROUTE_NAME_TAKEN`: "There is already a route called Kilimani route."'
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+        '422': { $ref: '#/components/responses/Validation' }
+
+  /admin/routes/new:
+    get:
+      tags: [Admin · Fleet]
+      operationId: getNewRoute
+      summary: A blank route for the editor
+      description: One empty starting stop and the school. (Declare this path before `/admin/routes/{routeId}` in Flask.)
+      responses:
+        '200':
+          description: The blank route.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RouteEditor' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+
+  /admin/routes/{routeId}:
+    parameters: [ { $ref: '#/components/parameters/RouteId' } ]
+    get:
+      tags: [Admin · Fleet]
+      operationId: getRoute
+      summary: One route for the editor
+      description: With how many students use each stop (a stop with students can't be removed).
+      responses:
+        '200':
+          description: The route.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RouteEditor' }
+        '404':
+          description: '"We could not find that route."'
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+    put:
+      tags: [Admin · Fleet]
+      operationId: updateRoute
+      x-service: saveRoute(routeId, values)
+      summary: Change a route
+      description: Stops sent with an `id` are kept; stops without one are new; missing ones are removed.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RouteForm' }
+      responses:
+        '200':
+          description: The changed route.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Route' }
+        '404':
+          description: '"We could not find that route."'
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+        '409':
+          description: |
+            - `ROUTE_NAME_TAKEN`: "There is already a route called Kilimani route."
+            - `STOP_IN_USE`: "Students are picked up at Argwings Kodhek Rd. Move them to another stop before removing it."
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+        '422': { $ref: '#/components/responses/Validation' }
+
+  /admin/placements:
+    get:
+      tags: [Admin · Fleet]
+      operationId: getWaitingGroups
+      summary: Accepted students who need a route, grouped by where they live
+      description: Each group with the ways it could be placed (route, bus and nearest stop), best first. Rules in `lib/grouping.js`.
+      responses:
+        '200':
+          description: The groups.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/WaitingGroups' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+
+  /admin/placements/approve:
+    post:
+      tags: [Admin · Fleet]
+      operationId: approveGroup
+      summary: Place a group on a route, a bus and a stop
+      description: |
+        All together or not at all: seats are checked for the whole group
+        on each trip time first. Each student gets the route and bus for
+        the runs in their plan and the stop for pickup, becomes `on-route`
+        and starts paying from today. Parents are told.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [studentIds, routeId, busId, stopId]
+              properties:
+                studentIds: { type: array, minItems: 1, items: { type: string } }
+                routeId: { type: string }
+                busId: { type: string }
+                stopId: { type: string }
+      responses:
+        '200':
+          description: Where they were placed.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [route, bus]
+                properties:
+                  route: { $ref: '#/components/schemas/RouteRef' }
+                  bus: { $ref: '#/components/schemas/Bus' }
+        '404':
+          description: '"We could not find that route, bus or stop."'
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+        '409':
+          description: |
+            - `ALREADY_PLACED`: "Some of these students already have a bus. Reload to see the latest."
+            - `BUS_FULL`: "Bus 03 has 2 free seats on the junior pickup, not 4."
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+
+  /admin/placements/{groupId}/dismiss:
+    post:
+      tags: [Admin · Fleet]
+      operationId: dismissGroup
+      summary: Hide a group's suggestion
+      description: The students still need a route. The server remembers the dismissal until the group changes.
+      parameters:
+        - name: groupId
+          in: path
+          required: true
+          description: The group's student ids, sorted and joined with `+`.
+          schema: { type: string }
+      responses:
+        '204': { description: Dismissed. }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+
+  # ── Admin · Payments ──────────────────────────────────────────────────
+  /admin/payments/overview:
+    get:
+      tags: [Admin · Payments]
+      operationId: getPaymentsOverview
+      summary: This term's totals, the students behind on fees, and the latest payments
+      responses:
+        '200':
+          description: The overview.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PaymentsOverview' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+
+  /admin/payments:
+    get:
+      tags: [Admin · Payments]
+      operationId: listTermPayments
+      summary: Every M-Pesa payment this term, oldest first, for "Export statement"
+      description: Includes failed and cancelled attempts; only `paid` counts towards fees.
+      responses:
+        '200':
+          description: The payments.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  allOf:
+                    - $ref: '#/components/schemas/Payment'
+                    - type: object
+                      required: [studentName, plan]
+                      properties:
+                        studentName: { type: string }
+                        plan: { $ref: '#/components/schemas/Plan' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+
+  /admin/payments/reminders:
+    post:
+      tags: [Admin · Payments]
+      operationId: sendReminders
+      summary: Remind parents that a payment is overdue
+      description: By email and push notification. One parent with two children behind gets one reminder.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [studentIds]
+              properties:
+                studentIds: { type: array, minItems: 1, items: { type: string } }
+      responses:
+        '200':
+          description: How many parents were reminded.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [parents]
+                properties:
+                  parents: { type: integer }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /admin/fee-settings:
+    get:
+      tags: [Admin · Payments]
+      operationId: getFeeSettings
+      summary: The school year's terms, and the rules for every term
+      responses:
+        '200':
+          description: The settings.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [terms, billedCount, rules]
+                properties:
+                  terms:
+                    type: array
+                    items:
+                      allOf:
+                        - $ref: '#/components/schemas/Term'
+                        - type: object
+                          required: [status]
+                          properties:
+                            status: { type: string, enum: [upcoming, current, closed] }
+                  billedCount: { type: integer, description: Students on a route (they pay fees). }
+                  rules:
+                    type: object
+                    required: [graceDays, newStudentDays]
+                    properties:
+                      graceDays: { type: integer, examples: [3] }
+                      newStudentDays: { type: integer, examples: [7] }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+
+  /admin/terms/{termId}/preview:
+    parameters: [ { $ref: '#/components/parameters/TermId' } ]
+    post:
+      tags: [Admin · Payments]
+      operationId: previewTermChange
+      summary: How many students would be overdue after a change
+      description: Shown before saving, because a higher fee or an earlier due date can make many families overdue at once. Saves nothing.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/TermForm' }
+      responses:
+        '200':
+          description: Overdue now and after.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [overdueNow, overdueAfter]
+                properties:
+                  overdueNow: { type: integer }
+                  overdueAfter: { type: integer }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /admin/terms/{termId}:
+    parameters: [ { $ref: '#/components/parameters/TermId' } ]
+    put:
+      tags: [Admin · Payments]
+      operationId: saveTerm
+      summary: Change a term's dates, fee and due dates
+      description: Terms can't overlap. Every balance is worked out again; payments stay as they were.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/TermForm' }
+      responses:
+        '200':
+          description: The term.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Term' }
+        '404':
+          description: '"We could not find that term."'
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+        '409':
+          description: '`TERMS_OVERLAP`: "These dates overlap Term 2 (27 Apr – 31 Jul)."'
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+        '422': { $ref: '#/components/responses/Validation' }
+
+  # ── Admin · Reports ───────────────────────────────────────────────────
+  /admin/reports/months:
+    get:
+      tags: [Admin · Reports]
+      operationId: getReportMonths
+      summary: The months that have trips recorded, latest first
+      responses:
+        '200':
+          description: The months.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  required: [month, label]
+                  properties:
+                    month: { $ref: '#/components/schemas/MonthKey' }
+                    label: { type: string, examples: [October 2026] }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+
+  /admin/reports/{month}:
+    get:
+      tags: [Admin · Reports]
+      operationId: getMonthlyReport
+      summary: One month's report
+      description: |
+        Built from the runs saved when each trip ends (`runs` table: date,
+        shift, bus, route, planned and actual arrival at school, riders,
+        seats) and the month's payments. Rules in `lib/reports.js`: a run
+        is on time when it reaches school at most 5 minutes late.
+      parameters:
+        - { name: month, in: path, required: true, schema: { $ref: '#/components/schemas/MonthKey' } }
+      responses:
+        '200':
+          description: The report.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MonthlyReport' }
+        '404':
+          description: '`NO_RUNS`: "There are no trips recorded for that month."'
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+
+  # ── M-Pesa ────────────────────────────────────────────────────────────
+  /payments/mpesa/callback:
+    post:
+      tags: [M-Pesa]
+      operationId: mpesaCallback
+      summary: Safaricom's result for an STK push
+      description: |
+        Called by Safaricom's Daraja API, never by the front end. Not
+        signed in: check the request against the `CheckoutRequestID` the
+        server started, and only accept callbacks from Safaricom's
+        published IP addresses. `ResultCode` 0 is paid (save
+        `MpesaReceiptNumber`, notify the parent); 1032 is cancelled by the
+        parent; anything else failed (save the description, notify the
+        parent). Must answer quickly with `ResultCode: 0`, and handle the
+        same callback twice without counting the payment twice.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              description: Safaricom's `Body.stkCallback` envelope.
+      responses:
+        '200':
+          description: Acknowledged.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ResultCode: { type: integer, const: 0 }
+                  ResultDesc: { type: string, examples: [Accepted] }
+        '400': { description: 'Not a valid Safaricom callback; ignored.' }
+
+components:
+  securitySchemes:
+    bearer:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  parameters:
+    ChildId: { name: childId, in: path, required: true, schema: { type: string } }
+    StudentId: { name: studentId, in: path, required: true, schema: { type: string } }
+    RiderId: { name: riderId, in: path, required: true, description: The student's id., schema: { type: string } }
+    DriverTripId:
+      name: tripId
+      in: path
+      required: true
+      description: The shift row's id (one bus on one trip time on one day), as `DriverTrip.id`.
+      schema: { type: string, examples: [2026-10-12-trip-senior-pickup-bus-03] }
+    TripTimeId: { name: tripId, in: path, required: true, description: A trip time's id., schema: { type: string, examples: [trip-senior-pickup] } }
+    RouteId: { name: routeId, in: path, required: true, schema: { type: string } }
+    TermId: { name: termId, in: path, required: true, schema: { type: string } }
+
+  responses:
+    Unauthenticated:
+      description: '`UNAUTHENTICATED` or `TOKEN_EXPIRED`.'
+      content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+    NotFound:
+      description: '`NOT_FOUND`.'
+      content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+    Validation:
+      description: '`VALIDATION`, with `fields`.'
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+          example:
+            error:
+              code: VALIDATION
+              message: Check the highlighted fields.
+              fields:
+                phone: Enter a Kenyan mobile number, for example 712 345 678
+    RateLimited:
+      description: '`RATE_LIMITED`: "Too many tries. Wait a minute and try again."'
+      content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+    AlreadyHandled:
+      description: '`ALREADY_HANDLED`: "This application has already been handled. Reload to see the latest."'
+      content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+    TripTimeConflict:
+      description: |
+        - `GRADES_OVERLAP`: the error from `checkTripTimes` (two pickups, or two drop-offs, share a grade).
+        - `RUN_CHANGE`: "A pickup can’t become a drop-off. Add a new trip time instead."
+        - `GRADE_ORDER` (422): "The first grade must come before the last."
+      content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+
+  schemas:
+    # ── Basics ────────────────────────────────────────────────────────────
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code: { type: string, examples: [BUS_FULL] }
+            message: { type: string }
+            fields:
+              type: [object, 'null']
+              additionalProperties: { type: string }
+    DateKey: { type: string, format: date, examples: ['2026-10-12'] }
+    MonthKey: { type: string, pattern: '^\d{4}-\d{2}$', examples: ['2026-10'] }
+    Clock: { type: string, pattern: '^([01]\d|2[0-3]):[0-5]\d$', examples: ['06:45'] }
+    Position:
+      type: array
+      description: '[latitude, longitude]'
+      items: { type: number }
+      minItems: 2
+      maxItems: 2
+      examples: [[-1.2921, 36.7853]]
+    Phone: { type: string, pattern: '^\+254[17]\d{8}$', examples: ['+254712345678'] }
+    PersonName: { type: string, minLength: 2, maxLength: 100 }
+    NewPassword:
+      type: string
+      minLength: 8
+      description: At least one letter, one number and one special character.
+    Money: { type: integer, minimum: 0, description: Whole Kenyan shillings. }
+    Grade:
+      type: string
+      enum: [PP1, PP2, Grade 1, Grade 2, Grade 3, Grade 4, Grade 5, Grade 6, Grade 7, Grade 8, Grade 9]
+    Plan:
+      type: string
+      enum: [both, morning, evening]
+      description: '`both`: pickup and drop-off; `morning` or `evening` only, at half the fee.'
+    Run:
+      type: string
+      enum: [morning, evening]
+      description: '`morning` is a pickup (home to school); `evening` is a drop-off.'
+    Stage:
+      type: string
+      enum: [applied, needs-route, on-route, declined]
+      description: |
+        `applied`: a parent added the child; `needs-route`: accepted,
+        waiting for a route and bus; `on-route`: has a bus (fees apply);
+        `declined`: the office said no, with a reason.
+    Guardian:
+      type: object
+      required: [name, phone]
+      properties:
+        name: { type: string }
+        phone: { $ref: '#/components/schemas/Phone' }
+
+    # ── Accounts ──────────────────────────────────────────────────────────
+    User:
+      type: object
+      required: [name, email, role]
+      properties:
+        name: { type: string }
+        email: { type: string, format: email }
+        role: { type: string, enum: [parent, driver, admin] }
+        language: { type: string, enum: [en, sw] }
+    LoginResponse:
+      type: object
+      required: [user, accessToken, refreshToken]
+      properties:
+        user: { $ref: '#/components/schemas/User' }
+        accessToken: { type: string }
+        refreshToken: { type: string }
+
+    # ── School set-up ─────────────────────────────────────────────────────
+    Term:
+      type: object
+      required: [id, name, opens, closes, fee, dueDates]
+      properties:
+        id: { type: string }
+        name: { type: string, examples: [Term 3 · 2026] }
+        opens: { $ref: '#/components/schemas/DateKey' }
+        closes: { $ref: '#/components/schemas/DateKey' }
+        fee: { allOf: [ { $ref: '#/components/schemas/Money' } ], description: The both-ways fee for the term. }
+        dueDates:
+          type: array
+          minItems: 1
+          maxItems: 3
+          items: { $ref: '#/components/schemas/DateKey' }
+          description: Instalment due dates; the fee is split evenly between them.
+    TermForm:
+      type: object
+      required: [opens, closes, fee, dueDates]
+      description: Checked as in `lib/validation/term-schema.js`.
+      properties:
+        opens: { $ref: '#/components/schemas/DateKey' }
+        closes: { $ref: '#/components/schemas/DateKey' }
+        fee: { type: integer, minimum: 1000, maximum: 200000, multipleOf: 2 }
+        dueDates:
+          type: array
+          minItems: 1
+          maxItems: 3
+          items: { $ref: '#/components/schemas/DateKey' }
+    TripTime:
+      type: object
+      required: [id, name, run, time, firstGrade, lastGrade]
+      description: A pickup or drop-off time and the grades that ride it.
+      properties:
+        id: { type: string }
+        name: { type: string, examples: [Senior pickup] }
+        run: { $ref: '#/components/schemas/Run' }
+        time: { allOf: [ { $ref: '#/components/schemas/Clock' } ], description: When the run starts. }
+        firstGrade: { $ref: '#/components/schemas/Grade' }
+        lastGrade: { $ref: '#/components/schemas/Grade' }
+    TripTimeForm:
+      type: object
+      required: [name, run, time, firstGrade, lastGrade]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 40 }
+        run: { $ref: '#/components/schemas/Run' }
+        time: { $ref: '#/components/schemas/Clock' }
+        firstGrade: { $ref: '#/components/schemas/Grade' }
+        lastGrade: { $ref: '#/components/schemas/Grade' }
+    TripName:
+      type: object
+      required: [name, time]
+      properties:
+        name: { type: string }
+        time: { $ref: '#/components/schemas/Clock' }
+
+    # ── Fleet ─────────────────────────────────────────────────────────────
+    Bus:
+      type: object
+      required: [id, number, plate, seats]
+      properties:
+        id: { type: string }
+        number: { type: string, examples: [Bus 03] }
+        plate: { type: string, examples: [KDA 482K] }
+        seats: { type: integer }
+    BusLoad:
+      type: object
+      description: Students per trip time, keyed by trip time id.
+      additionalProperties: { type: integer }
+      examples: [{ trip-senior-pickup: 31, trip-junior-pickup: 12 }]
+    Driver:
+      type: object
+      required: [id, name, phone, licence, photoUrl]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        email: { type: string, format: email, description: Admin views only. }
+        phone: { $ref: '#/components/schemas/Phone' }
+        licence: { type: string }
+        photoUrl: { type: [string, 'null'], format: uri }
+    BusOnRoute:
+      allOf:
+        - $ref: '#/components/schemas/Bus'
+        - type: object
+          required: [route]
+          properties:
+            route: { type: string, description: The route's name on this shift. }
+    BusWithDriver:
+      allOf:
+        - $ref: '#/components/schemas/BusOnRoute'
+        - type: object
+          required: [driver]
+          properties:
+            driver:
+              oneOf:
+                - $ref: '#/components/schemas/Driver'
+                - type: 'null'
+    RouteRef:
+      type: object
+      required: [id, name]
+      properties:
+        id: { type: string }
+        name: { type: string }
+    Stop:
+      type: object
+      required: [id, name, position, time]
+      description: A stop on a route. `time` is when a pickup reaches it; the school (`id` `school`) is always last.
+      properties:
+        id: { type: string }
+        name: { type: string }
+        position: { $ref: '#/components/schemas/Position' }
+        landmark: { type: string, description: Directions for the driver. }
+        time: { $ref: '#/components/schemas/Clock' }
+    Route:
+      type: object
+      required: [id, name, stops]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        stops: { type: array, items: { $ref: '#/components/schemas/Stop' } }
+    RouteForm:
+      type: object
+      required: [name, stops, schoolTime]
+      description: Checked as in `lib/validation/route-schema.js` (times later stop by stop). The school isn't sent; the server adds it.
+      properties:
+        name: { type: string, minLength: 2, maxLength: 60 }
+        stops:
+          type: array
+          minItems: 1
+          items:
+            type: object
+            required: [name, time, position]
+            properties:
+              id: { type: string, description: Leave out for a new stop. }
+              name: { type: string, minLength: 2, maxLength: 60 }
+              landmark: { type: string, maxLength: 120 }
+              time: { $ref: '#/components/schemas/Clock' }
+              position: { $ref: '#/components/schemas/Position' }
+        schoolTime: { $ref: '#/components/schemas/Clock' }
+    RouteEditor:
+      type: object
+      required: [name, stops, school]
+      properties:
+        id: { type: string, description: Missing on a new route. }
+        name: { type: string }
+        stops:
+          type: array
+          items:
+            type: object
+            required: [name, time, position]
+            properties:
+              id: { type: string }
+              name: { type: string }
+              landmark: { type: string }
+              time: { $ref: '#/components/schemas/Clock' }
+              position:
+                oneOf:
+                  - $ref: '#/components/schemas/Position'
+                  - type: 'null'
+              studentCount: { type: integer, description: Students picked up or dropped off here. }
+        school:
+          type: object
+          required: [name, position]
+          properties:
+            name: { type: string }
+            position: { $ref: '#/components/schemas/Position' }
+    ShiftRow:
+      type: object
+      required: [id, date, tripId, busId, driverId, routeId]
+      description: One bus on one trip time on one day, with its driver and route.
+      properties:
+        id: { type: string, examples: [2026-10-12-trip-senior-pickup-bus-03] }
+        date: { $ref: '#/components/schemas/DateKey' }
+        tripId: { type: string }
+        busId: { type: string }
+        driverId: { type: [string, 'null'] }
+        routeId: { type: [string, 'null'] }
+
+    # ── Fees and payments ─────────────────────────────────────────────────
+    Fees:
+      type: object
+      required: [status, fee, paid, balance]
+      description: |
+        This term's fees for one child (`lib/fees.js`). `upcoming` and
+        `overdue` add the instalment due (`amountDue`, `dueDate`);
+        `overdue` adds `graceEndsOn` (due date + 3 days). Children who
+        aren't on a route yet are `not-billed` (admin views only).
+      properties:
+        status: { type: string, enum: [paid, upcoming, overdue, not-billed] }
+        fee: { $ref: '#/components/schemas/Money' }
+        paid: { $ref: '#/components/schemas/Money' }
+        balance: { $ref: '#/components/schemas/Money' }
+        amountDue: { $ref: '#/components/schemas/Money' }
+        dueDate: { type: [string, 'null'], format: date }
+        graceEndsOn: { $ref: '#/components/schemas/DateKey' }
+    Payment:
+      type: object
+      required: [receipt, studentId, termId, amount, paidAt, status, payer]
+      properties:
+        receipt: { type: string, description: The M-Pesa receipt code., examples: [SJK3H7Q2LM] }
+        studentId: { type: string }
+        termId: { type: string }
+        amount: { $ref: '#/components/schemas/Money' }
+        paidAt: { type: string, format: date-time }
+        status: { type: string, enum: [paid, failed, cancelled], description: Only `paid` counts. }
+        payer: { $ref: '#/components/schemas/Guardian' }
+    ParentReceipt:
+      type: object
+      required: [receipt, childId, termId, amount, paidOn, childName]
+      properties:
+        receipt: { type: string }
+        childId: { type: string }
+        termId: { type: string }
+        amount: { $ref: '#/components/schemas/Money' }
+        paidOn: { $ref: '#/components/schemas/DateKey' }
+        childName: { type: string }
+    MpesaCheckout:
+      type: object
+      required: [checkoutRequestId, status, amount]
+      properties:
+        checkoutRequestId: { type: string }
+        status: { type: string, enum: [pending, paid, failed, cancelled] }
+        amount: { $ref: '#/components/schemas/Money' }
+        receipt: { type: string, description: When `paid`. }
+        failureReason:
+          type: string
+          description: When `failed` or `cancelled`, a sentence for the parent (a translation key), such as "You cancelled the M-Pesa prompt." or "Your M-Pesa balance was too low."
+
+    # ── Parent ────────────────────────────────────────────────────────────
+    Place:
+      type: object
+      required: [address, position]
+      properties:
+        address: { type: string, minLength: 3 }
+        landmark: { type: string, maxLength: 200 }
+        position: { $ref: '#/components/schemas/Position' }
+        stopId:
+          type: [string, 'null']
+          description: The route stop the office chose for this place; null until then, or after the pin moves.
+    ChildForm:
+      type: object
+      required: [fullName, grade, plan]
+      description: Checked as in `lib/validation/child-schema.js`. `photo` is required for a new child.
+      properties:
+        photo: { type: string, format: binary, description: 'JPEG, PNG or WebP, up to 5 MB.' }
+        fullName: { type: string, minLength: 2, maxLength: 100 }
+        grade: { $ref: '#/components/schemas/Grade' }
+        plan: { $ref: '#/components/schemas/Plan' }
+        pickup: { $ref: '#/components/schemas/Place' }
+        dropoff: { $ref: '#/components/schemas/Place' }
+    Child:
+      type: object
+      required: [id, name, photoUrl, grade, plan, stage, pickup, dropoff, morningRouteId, morningBusId, eveningRouteId, eveningBusId, pickupTrip, dropoffTrip, morningBus, eveningBus, activeRun, fees]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        photoUrl: { type: [string, 'null'], format: uri }
+        grade: { $ref: '#/components/schemas/Grade' }
+        plan: { $ref: '#/components/schemas/Plan' }
+        stage: { $ref: '#/components/schemas/Stage' }
+        declineReason: { type: string, description: When `stage` is `declined`. }
+        pickup:
+          oneOf: [ { $ref: '#/components/schemas/Place' }, { type: 'null' } ]
+        dropoff:
+          oneOf: [ { $ref: '#/components/schemas/Place' }, { type: 'null' } ]
+        morningRouteId: { type: [string, 'null'] }
+        morningBusId: { type: [string, 'null'] }
+        eveningRouteId: { type: [string, 'null'] }
+        eveningBusId: { type: [string, 'null'] }
+        pickupTrip:
+          description: The pickup time for the child's grade, if they ride one.
+          oneOf: [ { $ref: '#/components/schemas/TripName' }, { type: 'null' } ]
+        dropoffTrip:
+          oneOf: [ { $ref: '#/components/schemas/TripName' }, { type: 'null' } ]
+        morningBus:
+          oneOf: [ { $ref: '#/components/schemas/Bus' }, { type: 'null' } ]
+        eveningBus:
+          oneOf: [ { $ref: '#/components/schemas/Bus' }, { type: 'null' } ]
+        activeRun:
+          description: The run carrying the child right now, with its driver; null at any other time (parents see the driver only then).
+          oneOf:
+            - type: object
+              required: [kind, name, bus]
+              properties:
+                kind: { $ref: '#/components/schemas/Run' }
+                name: { type: string }
+                bus: { $ref: '#/components/schemas/BusWithDriver' }
+            - type: 'null'
+        fees: { $ref: '#/components/schemas/Fees' }
+    Family:
+      type: object
+      required: [parent, term, today, children, totals, unreadCount]
+      properties:
+        parent:
+          type: object
+          required: [name, email, phone]
+          properties:
+            name: { type: string }
+            email: { type: string, format: email }
+            phone: { $ref: '#/components/schemas/Phone' }
+        term: { $ref: '#/components/schemas/Term' }
+        today: { $ref: '#/components/schemas/DateKey' }
+        children: { type: array, items: { $ref: '#/components/schemas/Child' } }
+        totals:
+          type: object
+          required: [fee, paid, balance]
+          properties:
+            fee: { $ref: '#/components/schemas/Money' }
+            paid: { $ref: '#/components/schemas/Money' }
+            balance: { $ref: '#/components/schemas/Money' }
+        unreadCount: { type: integer }
+    TimedStop:
+      allOf:
+        - $ref: '#/components/schemas/Stop'
+        - type: object
+          required: [arrivesAt]
+          properties:
+            arrivesAt: { type: string, format: date-time, description: Today's planned arrival at this stop. }
+    ParentTrip:
+      type: object
+      required: [trip, bus, stops, yourStopId, riders, school, progress, updatedAt]
+      properties:
+        trip:
+          type: object
+          required: [id, name, time]
+          properties:
+            id: { type: string }
+            name: { type: string }
+            time: { $ref: '#/components/schemas/Clock' }
+        bus: { $ref: '#/components/schemas/BusWithDriver' }
+        stops: { type: array, items: { $ref: '#/components/schemas/TimedStop' } }
+        yourStopId: { type: string, description: This family's stop on the trip. }
+        riders:
+          type: array
+          items: { type: string }
+          description: First names of this family's children on the trip.
+        school:
+          type: object
+          required: [name, position]
+          properties:
+            name: { type: string }
+            detail: { type: string }
+            position: { $ref: '#/components/schemas/Position' }
+        progress:
+          type: object
+          required: [status, position, lastPassedIndex]
+          properties:
+            status: { type: string, enum: [not-started, on-the-way, finished] }
+            position: { $ref: '#/components/schemas/Position' }
+            lastPassedIndex: { type: integer, description: The last stop reached; -1 before the start. }
+        updatedAt: { type: string, format: date-time }
+    StopTime:
+      type: [object, 'null']
+      required: [name, arrivesAt]
+      properties:
+        name: { type: string }
+        arrivesAt: { type: string, format: date-time }
+    TripStatus:
+      type: object
+      required: [trip, bus, riders, summary, updatedAt]
+      properties:
+        trip:
+          type: object
+          required: [id, name, time]
+          properties:
+            id: { type: string }
+            name: { type: string }
+            time: { $ref: '#/components/schemas/Clock' }
+        bus:
+          type: object
+          required: [number, plate, driver]
+          properties:
+            number: { type: string }
+            plate: { type: string }
+            driver:
+              description: Only while the bus carries the children (`coming` or `to-school`).
+              oneOf:
+                - type: object
+                  required: [name, phone]
+                  properties:
+                    name: { type: string }
+                    phone: { $ref: '#/components/schemas/Phone' }
+                - type: 'null'
+        riders: { type: array, items: { type: string } }
+        summary:
+          type: object
+          required: [phase, minutesAway, stopsAway]
+          properties:
+            phase: { type: string, enum: [not-started, coming, to-school, at-school] }
+            minutesAway: { type: [integer, 'null'] }
+            stopsAway: { type: [integer, 'null'] }
+            yourStop: { $ref: '#/components/schemas/StopTime' }
+            school: { $ref: '#/components/schemas/StopTime' }
+            firstStop: { $ref: '#/components/schemas/StopTime' }
+            lastPassed: { $ref: '#/components/schemas/StopTime' }
+            nextStop: { $ref: '#/components/schemas/StopTime' }
+        updatedAt: { type: string, format: date-time }
+    Notification:
+      type: object
+      required: [id, kind, title, detail, at, read]
+      properties:
+        id: { type: string }
+        kind: { type: string, enum: [trip, payment-failed, payment-due, school] }
+        title: { type: string, description: In the language of `Accept-Language`. }
+        detail: { type: string }
+        at: { type: string, format: date-time }
+        read: { type: boolean }
+
+    # ── Driver ────────────────────────────────────────────────────────────
+    RiderMark:
+      type: object
+      required: [mark]
+      properties:
+        mark: { type: string, enum: [picked-up, dropped-off, absent] }
+        at: { type: string, format: date-time }
+        isLocked:
+          type: boolean
+          description: On a drop-off, a student absent for the day. The driver can't change it.
+        reason:
+          type: string
+          enum: [Absent this morning, Didn’t board at school]
+          description: Why a locked student isn't on the bus (a translation key).
+    Rider:
+      type: object
+      required: [id, name, grade, photoUrl, guardian, morningStopId, eveningStopId, mark]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        grade: { $ref: '#/components/schemas/Grade' }
+        photoUrl: { type: [string, 'null'], format: uri }
+        guardian: { $ref: '#/components/schemas/Guardian' }
+        morningStopId: { type: [string, 'null'] }
+        eveningStopId: { type: [string, 'null'] }
+        mark:
+          oneOf: [ { $ref: '#/components/schemas/RiderMark' }, { type: 'null' } ]
+    RunStop:
+      allOf:
+        - $ref: '#/components/schemas/TimedStop'
+        - type: object
+          required: [riders, hasRiders, isDone]
+          properties:
+            riders: { type: array, items: { $ref: '#/components/schemas/Rider' } }
+            hasRiders: { type: boolean }
+            isDone: { type: boolean, description: Every student at this stop is marked. }
+    BoardingCheck:
+      type: object
+      required: [riders, expected, boarded, missing, absent, isComplete]
+      description: The check at school before a drop-off leaves.
+      properties:
+        riders:
+          type: array
+          items:
+            type: object
+            required: [id, name, grade, photoUrl, guardian, absentReason, mark]
+            properties:
+              id: { type: string }
+              name: { type: string }
+              grade: { $ref: '#/components/schemas/Grade' }
+              photoUrl: { type: [string, 'null'], format: uri }
+              guardian: { $ref: '#/components/schemas/Guardian' }
+              absentReason:
+                type: [string, 'null']
+                enum: [Absent this morning, Didn’t board at school, null]
+              mark:
+                oneOf:
+                  - type: object
+                    required: [mark]
+                    properties:
+                      mark: { type: string, enum: [boarded, missing] }
+                      at: { type: string, format: date-time }
+                  - type: 'null'
+        expected: { type: integer, description: Students not absent for the day. }
+        boarded: { type: integer }
+        missing: { type: integer }
+        absent: { type: integer }
+        isComplete: { type: boolean, description: Every expected student is marked; the trip can start. }
+    DriverTrip:
+      type: object
+      required: [id, kind, name, bus, status, startedAt, startsAt, endsAt, boarding, stops, nextStopIndex, nextStop, riderCount, onBoard, markedCount, stopsLeft, isEveryoneMarked]
+      description: One of the driver's trips today. The counts follow `lib/trip-run.js`.
+      properties:
+        id: { type: string, description: The shift row's id. }
+        kind: { $ref: '#/components/schemas/Run' }
+        name: { type: string, examples: [Senior pickup] }
+        bus: { $ref: '#/components/schemas/BusOnRoute' }
+        status: { type: string, enum: [ready, active, ended] }
+        startedAt: { type: [string, 'null'], format: date-time }
+        startsAt: { type: string, format: date-time }
+        endsAt: { type: string, format: date-time }
+        boarding:
+          description: Drop-offs only; null on pickups.
+          oneOf: [ { $ref: '#/components/schemas/BoardingCheck' }, { type: 'null' } ]
+        stops: { type: array, items: { $ref: '#/components/schemas/RunStop' } }
+        nextStopIndex: { type: integer }
+        nextStop: { $ref: '#/components/schemas/RunStop' }
+        riderCount: { type: integer }
+        onBoard: { type: integer }
+        markedCount: { type: integer }
+        stopsLeft: { type: integer }
+        isEveryoneMarked: { type: boolean }
+    ActiveTrip:
+      allOf:
+        - $ref: '#/components/schemas/DriverTrip'
+        - type: object
+          required: [officePhone, busPosition, updatedAt]
+          properties:
+            officePhone: { $ref: '#/components/schemas/Phone' }
+            busPosition: { $ref: '#/components/schemas/Position' }
+            updatedAt: { type: string, format: date-time }
+    DriverDay:
+      type: object
+      required: [driver, bus, trips, activeTripId]
+      properties:
+        driver: { $ref: '#/components/schemas/Driver' }
+        bus:
+          description: Today's bus (the first shift's).
+          oneOf: [ { $ref: '#/components/schemas/BusOnRoute' }, { type: 'null' } ]
+        trips: { type: array, items: { $ref: '#/components/schemas/DriverTrip' } }
+        activeTripId: { type: [string, 'null'] }
+
+    # ── Admin · Today ─────────────────────────────────────────────────────
+    LiveBus:
+      type: object
+      required: [shiftId, trip, stops, bus, route, school, riderCount, onBoard, upcoming, isRunning, position, nextStop, stopsPassed, stopCount, delayMinutes, status]
+      properties:
+        shiftId: { type: string }
+        trip:
+          type: object
+          required: [id, name, run, time]
+          properties:
+            id: { type: string }
+            name: { type: string }
+            run: { $ref: '#/components/schemas/Run' }
+            time: { $ref: '#/components/schemas/Clock' }
+        stops:
+          type: array
+          description: Every stop with its expected arrival, including the delay.
+          items:
+            type: object
+            required: [id, name, arrivesAt]
+            properties:
+              id: { type: string }
+              name: { type: string }
+              arrivesAt: { type: string, format: date-time }
+        bus: { $ref: '#/components/schemas/BusWithDriver' }
+        route:
+          type: array
+          items: { $ref: '#/components/schemas/Position' }
+          description: The line drawn on the map.
+        school: { $ref: '#/components/schemas/TimedStop' }
+        riderCount: { type: integer }
+        onBoard: { type: integer }
+        upcoming:
+          type: array
+          description: The next four stops, with the names of the students getting on or off.
+          items:
+            allOf:
+              - $ref: '#/components/schemas/TimedStop'
+              - type: object
+                required: [riders]
+                properties:
+                  riders: { type: array, items: { type: string } }
+        isRunning: { type: boolean }
+        position: { $ref: '#/components/schemas/Position' }
+        nextStop:
+          oneOf: [ { $ref: '#/components/schemas/TimedStop' }, { type: 'null' } ]
+        stopsPassed: { type: integer }
+        stopCount: { type: integer }
+        delayMinutes: { type: integer }
+        status: { type: string, enum: [not-started, on-time, late, signal-lost, arrived] }
+        arrivedAt: { type: string, format: date-time, description: When `arrived`. }
+        lastSeenAt: { type: string, format: date-time, description: The last position received; always sent while running. }
+    LiveBuses:
+      type: object
+      required: [buses, trip, updatedAt]
+      properties:
+        buses: { type: array, items: { $ref: '#/components/schemas/LiveBus' } }
+        trip:
+          oneOf: [ { $ref: '#/components/schemas/TripTime' }, { type: 'null' } ]
+        updatedAt: { type: string, format: date-time }
+    AttentionItem:
+      type: object
+      required: [kind, title, detail, action]
+      properties:
+        kind: { type: string, enum: [boarding, signal, shift, fees, applications, waiting] }
+        title: { type: string }
+        detail: { type: string }
+        action:
+          description: A button; `href` (such as `tel:`) or `to` (a page in the app).
+          oneOf:
+            - type: object
+              required: [label]
+              properties:
+                label: { type: string }
+                href: { type: string }
+                to: { type: string }
+            - type: 'null'
+        link:
+          type: object
+          required: [label, to]
+          properties:
+            label: { type: string }
+            to: { type: string }
+    AdminOverview:
+      type: object
+      required: [now, term, trip, buses, stats, attention]
+      properties:
+        now: { type: string, format: date-time }
+        term: { $ref: '#/components/schemas/Term' }
+        trip:
+          oneOf: [ { $ref: '#/components/schemas/TripTime' }, { type: 'null' } ]
+        buses: { type: array, items: { $ref: '#/components/schemas/LiveBus' } }
+        stats:
+          type: object
+          required: [busCount, busesRunning, busesArrived, riding, done, feesCollected, feesExpected, flagged, applications, needsRoute]
+          properties:
+            busCount: { type: integer }
+            busesRunning: { type: integer }
+            busesArrived: { type: integer }
+            riding: { type: integer }
+            done: { type: integer, description: Picked up so far on a pickup; dropped off so far on a drop-off. }
+            feesCollected: { $ref: '#/components/schemas/Money' }
+            feesExpected: { $ref: '#/components/schemas/Money' }
+            flagged: { type: integer }
+            applications: { type: integer }
+            needsRoute: { type: integer }
+        attention: { type: array, items: { $ref: '#/components/schemas/AttentionItem' } }
+    Student:
+      type: object
+      required: [id, name, grade, photoUrl, plan, guardian, pickup, stage, morningRouteId, morningBusId, eveningRouteId, eveningBusId, morningTrip, eveningTrip, morningRoute, eveningRoute, morningBus, eveningBus, fees, isFlagged]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        grade: { $ref: '#/components/schemas/Grade' }
+        photoUrl: { type: [string, 'null'], format: uri }
+        plan: { $ref: '#/components/schemas/Plan' }
+        guardian: { $ref: '#/components/schemas/Guardian' }
+        pickup:
+          oneOf: [ { $ref: '#/components/schemas/Place' }, { type: 'null' } ]
+        dropoff:
+          oneOf: [ { $ref: '#/components/schemas/Place' }, { type: 'null' } ]
+        stage: { $ref: '#/components/schemas/Stage' }
+        morningRouteId: { type: [string, 'null'] }
+        morningBusId: { type: [string, 'null'] }
+        eveningRouteId: { type: [string, 'null'] }
+        eveningBusId: { type: [string, 'null'] }
+        morningTrip:
+          oneOf: [ { $ref: '#/components/schemas/TripTime' }, { type: 'null' } ]
+        eveningTrip:
+          oneOf: [ { $ref: '#/components/schemas/TripTime' }, { type: 'null' } ]
+        morningRoute:
+          oneOf: [ { $ref: '#/components/schemas/RouteRef' }, { type: 'null' } ]
+        eveningRoute:
+          oneOf: [ { $ref: '#/components/schemas/RouteRef' }, { type: 'null' } ]
+        morningBus:
+          oneOf: [ { $ref: '#/components/schemas/Bus' }, { type: 'null' } ]
+        eveningBus:
+          oneOf: [ { $ref: '#/components/schemas/Bus' }, { type: 'null' } ]
+        joinedOn: { $ref: '#/components/schemas/DateKey' }
+        removedOn: { type: [string, 'null'], format: date, description: When taken off the bus for unpaid fees. }
+        application:
+          type: object
+          properties:
+            submittedOn: { $ref: '#/components/schemas/DateKey' }
+            decidedOn: { $ref: '#/components/schemas/DateKey' }
+        fees: { $ref: '#/components/schemas/Fees' }
+        isFlagged: { type: boolean, description: Overdue past the grace period; removing them needs an admin. }
+    StudentList:
+      type: object
+      required: [students, total, counts, grades, buses]
+      properties:
+        students: { type: array, items: { $ref: '#/components/schemas/Student' } }
+        total: { type: integer, description: All accepted students. }
+        counts:
+          type: object
+          required: [onRoute, needsRoute, applications, flagged, plans]
+          properties:
+            onRoute: { type: integer }
+            needsRoute: { type: integer }
+            applications: { type: integer }
+            flagged: { type: integer }
+            plans:
+              type: object
+              required: [both, morning, evening]
+              properties:
+                both: { type: integer }
+                morning: { type: integer }
+                evening: { type: integer }
+        grades:
+          type: array
+          description: The grades students are in, in school order, for the filter.
+          items: { $ref: '#/components/schemas/Grade' }
+        buses:
+          type: array
+          items:
+            type: object
+            required: [id, number]
+            properties:
+              id: { type: string }
+              number: { type: string }
+    StudentToday:
+      type: object
+      required: [date, absence, ride, trips]
+      properties:
+        date: { $ref: '#/components/schemas/DateKey' }
+        absence:
+          oneOf:
+            - type: object
+              required: [studentId, date, at, busId, tripId, markedAt, clearedAt, busNumber]
+              properties:
+                studentId: { type: string }
+                date: { $ref: '#/components/schemas/DateKey' }
+                at: { type: string, enum: [pickup, boarding] }
+                busId: { type: string }
+                tripId: { type: string, description: The shift row's id. }
+                markedAt: { type: string, format: date-time }
+                clearedAt:
+                  type: [string, 'null']
+                  format: date-time
+                  description: When the office marked them present again.
+                busNumber: { type: string }
+            - type: 'null'
+        ride:
+          description: Where the student is, if their trip is the one on now and they're riding it.
+          oneOf:
+            - type: object
+              required: [kind, trip, bus, stop, dueAt]
+              properties:
+                kind: { type: string, enum: [not-started, waiting, on-bus, at-school, dropped-off] }
+                trip:
+                  type: object
+                  properties:
+                    id: { type: string }
+                    name: { type: string }
+                    run: { $ref: '#/components/schemas/Run' }
+                    time: { $ref: '#/components/schemas/Clock' }
+                bus:
+                  type: object
+                  properties:
+                    id: { type: string }
+                    number: { type: string }
+                stop:
+                  oneOf: [ { $ref: '#/components/schemas/RouteRef' }, { type: 'null' } ]
+                dueAt: { type: [string, 'null'], format: date-time }
+            - type: 'null'
+        trips:
+          type: object
+          required: [morning, evening]
+          properties:
+            morning:
+              oneOf: [ { $ref: '#/components/schemas/TripTime' }, { type: 'null' } ]
+            evening:
+              oneOf: [ { $ref: '#/components/schemas/TripTime' }, { type: 'null' } ]
+    StudentProfile:
+      type: object
+      required: [student, today, routeOptions, busOptions, week, shifts, officePhone]
+      properties:
+        student: { $ref: '#/components/schemas/Student' }
+        today: { $ref: '#/components/schemas/StudentToday' }
+        routeOptions: { type: array, items: { $ref: '#/components/schemas/RouteRef' } }
+        busOptions:
+          type: array
+          items:
+            type: object
+            required: [id, number, seats, load]
+            properties:
+              id: { type: string }
+              number: { type: string }
+              seats: { type: integer }
+              load: { $ref: '#/components/schemas/BusLoad' }
+        week: { type: array, items: { $ref: '#/components/schemas/DateKey' } }
+        shifts: { type: array, items: { $ref: '#/components/schemas/ShiftRow' } }
+        officePhone: { $ref: '#/components/schemas/Phone' }
+    RunChoice:
+      description: '`{ routeId, busId }` for a run, both or neither. Empty strings count as none.'
+      oneOf:
+        - type: object
+          required: [routeId, busId]
+          properties:
+            routeId: { type: [string, 'null'] }
+            busId: { type: [string, 'null'] }
+        - type: 'null'
+    Application:
+      type: object
+      required: [id, name, grade, photoUrl, plan, guardian, pickup, dropoff, submittedOn, decidedOn, declineReason, trips]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        grade: { $ref: '#/components/schemas/Grade' }
+        photoUrl: { type: [string, 'null'], format: uri }
+        plan: { $ref: '#/components/schemas/Plan' }
+        guardian: { $ref: '#/components/schemas/Guardian' }
+        pickup:
+          oneOf: [ { $ref: '#/components/schemas/Place' }, { type: 'null' } ]
+        dropoff:
+          oneOf: [ { $ref: '#/components/schemas/Place' }, { type: 'null' } ]
+        submittedOn: { type: [string, 'null'], format: date }
+        decidedOn: { type: [string, 'null'], format: date }
+        declineReason: { type: [string, 'null'] }
+        trips:
+          type: object
+          description: The trip times their grade would ride.
+          required: [morning, evening]
+          properties:
+            morning:
+              oneOf: [ { $ref: '#/components/schemas/TripName' }, { type: 'null' } ]
+            evening:
+              oneOf: [ { $ref: '#/components/schemas/TripName' }, { type: 'null' } ]
+
+    # ── Admin · Fleet ─────────────────────────────────────────────────────
+    Fleet:
+      type: object
+      required: [shift, trips, buses, drivers]
+      properties:
+        shift:
+          type: object
+          required: [date, trip]
+          description: The shift on now (or next today).
+          properties:
+            date: { $ref: '#/components/schemas/DateKey' }
+            trip:
+              oneOf: [ { $ref: '#/components/schemas/TripTime' }, { type: 'null' } ]
+        trips: { type: array, items: { $ref: '#/components/schemas/TripTime' } }
+        buses:
+          type: array
+          items:
+            allOf:
+              - $ref: '#/components/schemas/Bus'
+              - type: object
+                required: [load, now]
+                properties:
+                  load: { $ref: '#/components/schemas/BusLoad' }
+                  now:
+                    type: object
+                    required: [driver, route]
+                    properties:
+                      driver:
+                        oneOf: [ { $ref: '#/components/schemas/Driver' }, { type: 'null' } ]
+                      route:
+                        oneOf: [ { $ref: '#/components/schemas/RouteRef' }, { type: 'null' } ]
+        drivers:
+          type: array
+          items:
+            allOf:
+              - $ref: '#/components/schemas/Driver'
+              - type: object
+                required: [now]
+                properties:
+                  now:
+                    oneOf:
+                      - type: object
+                        required: [bus, route]
+                        properties:
+                          bus: { $ref: '#/components/schemas/Bus' }
+                          route:
+                            oneOf: [ { $ref: '#/components/schemas/RouteRef' }, { type: 'null' } ]
+                      - type: 'null'
+    Schedule:
+      type: object
+      required: [week, today, current, trips, shifts, past, buses, drivers, routes, students]
+      properties:
+        week: { type: array, items: { $ref: '#/components/schemas/DateKey' }, description: Monday to Friday. }
+        today: { $ref: '#/components/schemas/DateKey' }
+        current:
+          type: object
+          required: [date, trip, rows]
+          properties:
+            date: { $ref: '#/components/schemas/DateKey' }
+            trip:
+              oneOf: [ { $ref: '#/components/schemas/TripTime' }, { type: 'null' } ]
+            rows: { type: array, items: { $ref: '#/components/schemas/ShiftRow' } }
+        trips: { type: array, items: { $ref: '#/components/schemas/TripTime' } }
+        shifts: { type: array, items: { $ref: '#/components/schemas/ShiftRow' } }
+        past:
+          type: object
+          description: '`"<date>-<tripId>"` → whether that shift has finished.'
+          additionalProperties: { type: boolean }
+        buses: { type: array, items: { $ref: '#/components/schemas/Bus' } }
+        drivers:
+          type: array
+          items:
+            type: object
+            required: [id, name, photoUrl]
+            properties:
+              id: { type: string }
+              name: { type: string }
+              photoUrl: { type: [string, 'null'], format: uri }
+        routes: { type: array, items: { $ref: '#/components/schemas/RouteRef' } }
+        students:
+          type: array
+          description: Just enough of each student to check a shift's seats and routes.
+          items:
+            type: object
+            required: [id, grade, morningRouteId, morningBusId, eveningRouteId, eveningBusId]
+            properties:
+              id: { type: string }
+              grade: { $ref: '#/components/schemas/Grade' }
+              morningRouteId: { type: [string, 'null'] }
+              morningBusId: { type: [string, 'null'] }
+              eveningRouteId: { type: [string, 'null'] }
+              eveningBusId: { type: [string, 'null'] }
+    RoutesOverview:
+      type: object
+      required: [shift, timesTrip, routes, freeBuses]
+      properties:
+        shift:
+          type: object
+          required: [date, trip]
+          properties:
+            date: { $ref: '#/components/schemas/DateKey' }
+            trip:
+              oneOf: [ { $ref: '#/components/schemas/TripTime' }, { type: 'null' } ]
+        timesTrip:
+          description: The pickup whose times the stops show (this shift's, or the first pickup of the day).
+          oneOf: [ { $ref: '#/components/schemas/TripTime' }, { type: 'null' } ]
+        routes:
+          type: array
+          items:
+            type: object
+            required: [id, name, buses, seats, load, fit, studentCount, suggestion, stops, withoutStop]
+            properties:
+              id: { type: string }
+              name: { type: string }
+              buses:
+                type: array
+                description: The buses on this route in the shift on now.
+                items:
+                  type: object
+                  required: [bus, driver, students]
+                  properties:
+                    bus: { $ref: '#/components/schemas/Bus' }
+                    driver:
+                      oneOf: [ { $ref: '#/components/schemas/Driver' }, { type: 'null' } ]
+                    students: { type: integer }
+              seats: { type: [integer, 'null'], description: Total seats of those buses; null with none. }
+              load: { $ref: '#/components/schemas/BusLoad' }
+              fit:
+                type: object
+                required: [status, used, share]
+                description: '`lib/route-fit.js`.'
+                properties:
+                  status: { type: string, enum: [no-bus, over, full, ok, roomy] }
+                  used: { type: integer }
+                  share: { type: [number, 'null'] }
+              studentCount: { type: integer }
+              suggestion:
+                description: A free bus that would help.
+                oneOf:
+                  - type: object
+                    required: [kind, bus]
+                    properties:
+                      kind: { type: string, enum: [assign, add, smaller] }
+                      bus: { $ref: '#/components/schemas/Bus' }
+                  - type: 'null'
+              stops:
+                type: array
+                items:
+                  allOf:
+                    - $ref: '#/components/schemas/Stop'
+                    - type: object
+                      required: [riders]
+                      properties:
+                        riders:
+                          type: array
+                          items:
+                            type: object
+                            required: [id, name, grade]
+                            properties:
+                              id: { type: string }
+                              name: { type: string }
+                              grade: { $ref: '#/components/schemas/Grade' }
+              withoutStop: { type: integer, description: Students on the route with no stop yet. }
+        freeBuses: { type: array, items: { $ref: '#/components/schemas/Bus' }, description: Buses with no route in the shift on now. }
+    WaitingGroups:
+      type: object
+      required: [groups, waitingCount, dismissedCount, trips]
+      properties:
+        groups:
+          type: array
+          items:
+            type: object
+            required: [id, area, students, spreadKm, needs, canFillBus, options]
+            properties:
+              id: { type: string, description: "The students' ids, sorted, joined with `+`." }
+              area: { type: string, examples: [Kileleshwa] }
+              students:
+                type: array
+                items:
+                  type: object
+                  required: [id, name, grade, plan]
+                  properties:
+                    id: { type: string }
+                    name: { type: string }
+                    grade: { $ref: '#/components/schemas/Grade' }
+                    plan: { $ref: '#/components/schemas/Plan' }
+              spreadKm: { type: number }
+              needs: { $ref: '#/components/schemas/BusLoad' }
+              canFillBus: { type: boolean, description: Big enough for a bus of their own. }
+              options:
+                type: array
+                description: Best first.
+                items:
+                  type: object
+                  required: [route, bus, stop, distanceKm, days, free, seatsAfter, fits]
+                  properties:
+                    route: { $ref: '#/components/schemas/RouteRef' }
+                    bus:
+                      type: object
+                      required: [id, number, seats]
+                      properties:
+                        id: { type: string }
+                        number: { type: string }
+                        seats: { type: integer }
+                    stop: { $ref: '#/components/schemas/RouteRef' }
+                    distanceKm: { type: number }
+                    days: { type: integer, description: Days this week the bus is on the route. }
+                    free: { $ref: '#/components/schemas/BusLoad' }
+                    seatsAfter: { $ref: '#/components/schemas/BusLoad' }
+                    fits: { type: boolean }
+        waitingCount: { type: integer }
+        dismissedCount: { type: integer }
+        trips: { type: array, items: { $ref: '#/components/schemas/TripTime' } }
+
+    # ── Admin · Payments and reports ──────────────────────────────────────
+    PaymentsOverview:
+      type: object
+      required: [now, term, stats, behind, recent]
+      properties:
+        now: { type: string, format: date-time }
+        term: { $ref: '#/components/schemas/Term' }
+        stats:
+          type: object
+          required: [fee, oneWayFee, collected, expected, billedCount, bothWaysCount, overdueAmount, overdueCount, flaggedCount]
+          properties:
+            fee: { $ref: '#/components/schemas/Money' }
+            oneWayFee: { $ref: '#/components/schemas/Money' }
+            collected: { $ref: '#/components/schemas/Money' }
+            expected: { $ref: '#/components/schemas/Money' }
+            billedCount: { type: integer }
+            bothWaysCount: { type: integer }
+            overdueAmount: { $ref: '#/components/schemas/Money' }
+            overdueCount: { type: integer }
+            flaggedCount: { type: integer }
+        behind:
+          type: array
+          description: Overdue students, flagged first, then the largest amount due.
+          items:
+            type: object
+            required: [id, name, grade, plan, guardian, fee, paid, amountDue, balance, graceEndsOn, isFlagged, removedOn, remindedAt]
+            properties:
+              id: { type: string }
+              name: { type: string }
+              grade: { $ref: '#/components/schemas/Grade' }
+              plan: { $ref: '#/components/schemas/Plan' }
+              guardian: { $ref: '#/components/schemas/Guardian' }
+              fee: { $ref: '#/components/schemas/Money' }
+              paid: { $ref: '#/components/schemas/Money' }
+              amountDue: { $ref: '#/components/schemas/Money' }
+              balance: { $ref: '#/components/schemas/Money' }
+              graceEndsOn: { $ref: '#/components/schemas/DateKey' }
+              isFlagged: { type: boolean }
+              removedOn: { type: [string, 'null'], format: date }
+              remindedAt: { type: [string, 'null'], format: date-time }
+        recent:
+          type: array
+          description: The six latest payment attempts this term.
+          items:
+            allOf:
+              - $ref: '#/components/schemas/Payment'
+              - type: object
+                required: [student]
+                properties:
+                  student:
+                    type: object
+                    required: [name, grade]
+                    properties:
+                      name: { type: string }
+                      grade: { $ref: '#/components/schemas/Grade' }
+    OnTimeRow:
+      type: object
+      required: [runs, onTime, share, averageDelay]
+      properties:
+        runs: { type: integer }
+        onTime: { type: integer }
+        share: { type: number, minimum: 0, maximum: 1 }
+        averageDelay: { type: number, description: 'Minutes, one decimal.' }
+    MonthlyReport:
+      type: object
+      required: [month, label, from, to, schoolDays, isPartial, onTime, byRoute, byTrip, occupancy, fees, generatedAt]
+      properties:
+        month: { $ref: '#/components/schemas/MonthKey' }
+        label: { type: string }
+        from: { $ref: '#/components/schemas/DateKey' }
+        to: { $ref: '#/components/schemas/DateKey' }
+        schoolDays: { type: integer }
+        isPartial: { type: boolean, description: The month isn't over; the figures are so far. }
+        onTime: { $ref: '#/components/schemas/OnTimeRow' }
+        byRoute:
+          type: array
+          items:
+            allOf:
+              - $ref: '#/components/schemas/OnTimeRow'
+              - type: object
+                required: [id, name]
+                properties:
+                  id: { type: string }
+                  name: { type: string }
+        byTrip:
+          type: array
+          items:
+            allOf:
+              - $ref: '#/components/schemas/OnTimeRow'
+              - type: object
+                required: [id, name, time]
+                properties:
+                  id: { type: string }
+                  name: { type: string }
+                  time: { $ref: '#/components/schemas/Clock' }
+        occupancy:
+          type: array
+          items:
+            type: object
+            required: [busId, number, plate, seats, runs, averageRiders, peakRiders, averageShare, peakShare]
+            properties:
+              busId: { type: string }
+              number: { type: string }
+              plate: { type: string }
+              seats: { type: integer }
+              runs: { type: integer }
+              averageRiders: { type: number }
+              peakRiders: { type: integer }
+              averageShare: { type: number }
+              peakShare: { type: number }
+        fees:
+          type: object
+          required: [collected, payments, failed, byWeek, due]
+          properties:
+            collected: { $ref: '#/components/schemas/Money' }
+            payments: { type: integer }
+            failed: { type: integer }
+            byWeek:
+              type: array
+              description: Weeks start on Monday; the first is cut at the 1st of the month.
+              items:
+                type: object
+                required: [week, amount]
+                properties:
+                  week: { $ref: '#/components/schemas/DateKey' }
+                  amount: { $ref: '#/components/schemas/Money' }
+            due: { $ref: '#/components/schemas/Money', description: Instalments falling due in the month. }
+        generatedAt: { type: string, format: date-time }
