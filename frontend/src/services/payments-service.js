@@ -1,4 +1,3 @@
-import { PLANS } from '@/config/plans'
 import { sampleNow } from '@/data/sample-clock'
 import { toDateKey } from '@/lib/dates'
 import { GRACE_DAYS, NEW_STUDENT_DAYS, planFee, termStatus } from '@/lib/fees'
@@ -84,7 +83,8 @@ export async function getPaymentsOverview() {
   }
 }
 
-// Every payment this term, for "Export statement".
+// Every payment this term, for "Export statement". `plan` is the plan's
+// id; config/plans.js has its label.
 export async function listTermPayments() {
   await simulateNetwork(200)
   const term = currentTerm()
@@ -93,7 +93,7 @@ export async function listTermPayments() {
     .toSorted((a, b) => a.paidAt.localeCompare(b.paidAt))
     .map((p) => {
       const student = findStudent(p.studentId)
-      return { ...p, studentName: student.name, plan: PLANS[student.plan] }
+      return { ...p, studentName: student.name, plan: student.plan }
     })
 }
 

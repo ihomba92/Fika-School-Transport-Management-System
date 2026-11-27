@@ -79,7 +79,8 @@ This folder is the **React front end**. It is complete and runs on its own using
 
 | Tool | Version | What it does here |
 |---|---|---|
-| [Vitest](https://vitest.dev) | 5.1 | Unit tests (188 tests in 35 files). |
+| [Vitest](https://vitest.dev) | 5.1 | Unit tests (197 tests in 36 files). |
+| [Ajv](https://ajv.js.org) + [yaml](https://eemeli.org/yaml/) | 8 / 2 | The contract test: checks the mock services' answers against `../api/openapi.yaml`. |
 | [Testing Library](https://testing-library.com) + jsdom | — | Installed for component tests. |
 | [Oxlint](https://oxc.rs) | 1.90 | Linting (`npm run lint`), including React Hooks and fast-refresh rules. |
 | [Prettier](https://prettier.io) + prettier-plugin-tailwindcss | 3.10 | Formatting: no semicolons, single quotes, Tailwind classes sorted. |
@@ -306,12 +307,13 @@ These live in `src/lib/` and are covered by unit tests:
 ## 10. Testing and code quality
 
 ```bash
-npm test          # 188 unit tests
+npm test          # 197 unit tests, including the API contract check
 npm run lint      # Oxlint
 npm run build     # must build without errors
 ```
 
 - **Unit tests** sit next to the code they test (`*.test.js`): trip times, shifts, fees, grouping, stop order, route fit, trips, reports, low-data detection, the landing animation's timeline, formatting (English and Kiswahili), CSV export, the text helpers behind applications, student status and reports, and every Zod schema.
+- **API contract check**: `src/services/contract.test.js` calls every mock service that reads data and checks its answer against `../api/openapi.yaml`, and fails if a service function has no endpoint there. Change a mock's shape and the contract together, or the test fails.
 - **Translation check**: `src/i18n/i18n.test.js` fails if any parent, driver or sign-in text has no Kiswahili, or a translation drops a `{{placeholder}}`.
 - **Browser walkthroughs** with Playwright cover each module (schedule and trip times, route editing, applications and placement, payments, fee settings, reports, parent with Kiswahili and low-data mode, driver with the boarding check) at phone and desktop widths, in both themes.
 - **Conventions**: one component per file, text helpers in `.js` files (so component files export only components), `useWatch` rather than `watch` in forms, comments that explain *why*, and Prettier formatting.
@@ -320,24 +322,25 @@ npm run build     # must build without errors
 
 ## 11. Connecting the back end
 
-The plan for the Flask API:
+**The contract is [`../api/openapi.yaml`](../api/openapi.yaml)** (OpenAPI 3.1). It has one endpoint for every function in `src/services/` (its `operationId` is the function's name), with the request body, the response's exact shape and every error code and message. Open it in [Swagger Editor](https://editor.swagger.io), with the VS Code *OpenAPI (Swagger) Editor* extension, or as a docs page with `npx @redocly/cli preview-docs ../api/openapi.yaml`. [`../api/README.md`](../api/README.md) lists the endpoints as a checklist for building the Flask API.
 
-1. Add `VITE_API_URL` to a `.env` file and a small `api.js` helper that adds the `Authorization: Bearer` header, refreshes the access token when it expires, and logs out on a failed refresh.
-2. Replace the body of each function in `src/services/*` with a real request. The function names and return shapes stay the same, so pages don't change.
+The plan:
+
+1. Add `VITE_API_URL` to a `.env` file and a small `api.js` helper that adds the `Authorization: Bearer` header and `Accept-Language`, refreshes the access token when it expires, turns the contract's `date-time` fields into `Date`s, and throws the server's `error.message` (pages already show it, translated).
+2. Replace the body of each function in `src/services/*` with a real request, one area at a time. The function names and return shapes stay the same, so pages don't change. The contract's *Changes the front end needs* list covers the few that change (M-Pesa polling, Google's ID token, the reset-password token).
 3. Delete `src/data/` sample files, `mock-network.js` and the sample clock (`sampleNow` → `new Date()`).
 4. Connect real Google sign-in, M‑Pesa (Daraja STK push and callbacks), Firebase push notifications and Brevo email.
-5. Repeat every rule from `src/lib/` on the server: the front end's checks are for a good experience, the server's are for security.
+5. Repeat every rule from `src/lib/` on the server, with the same test cases: the front end's checks are for a good experience, the server's are for security. The contract lists which rule lives in which file.
 
-What the newer screens need from the database and API:
+What the newer screens need in the database:
 
-| Feature | Tables and columns | Endpoints |
-|---|---|---|
-| Trip times | `trip_times (id, name, run, start_time, first_grade, last_grade)`; `shifts.trip_time_id` | CRUD for trip times; shifts per trip time |
-| New applications | `students.stage` (`applied`, `needs-route`, `on-route`, `declined`), `submitted_on`, `decided_on`, `decline_reason` | list, accept, decline, reopen; notify the parent |
-| Attendance and boarding | `attendance (student_id, date, at, bus_id, shift_id, marked_at, cleared_at)` | mark absent / boarded / not here; office marks present; push the *Not here* alert |
-| Languages | `users.language` (`en` / `sw`) | save the choice; send notifications, email and SMS in it |
-| Low-data mode | — | `GET /parent/trip/status` (a few hundred bytes, cached briefly in Redis) |
-| Reports | `runs (date, shift_id, bus_id, route_id, planned_at, arrived_at, riders, seats)`, written when a trip ends | `GET /reports/months`, `GET /reports/monthly?month=`, a WeasyPrint PDF, and a monthly email job |
+| Feature | Tables and columns |
+|---|---|
+| Trip times | `trip_times (id, name, run, start_time, first_grade, last_grade)`; `shifts.trip_time_id` |
+| New applications | `students.stage` (`applied`, `needs-route`, `on-route`, `declined`), `submitted_on`, `decided_on`, `decline_reason` |
+| Attendance and boarding | `attendance (student_id, date, at, bus_id, shift_id, marked_at, cleared_at)` |
+| Languages | `users.language` (`en` / `sw`) |
+| Reports | `runs (date, shift_id, bus_id, route_id, planned_at, arrived_at, riders, seats)`, written when a trip ends |
 
 ---
 
@@ -351,6 +354,7 @@ What the newer screens need from the database and API:
 | Low-data mode for parents | **Save data**: the trip in words instead of the map, on by itself on Data Saver or 2G; a few hundred bytes every 30 s and no map download | `use-low-data.js`, `trip-text-view.jsx`, section 7 *Low-data mode* |
 | Monthly reports | On-time performance by route and trip time, bus occupancy and fee collection, with PDF (print) and CSV export | `/admin/reports`, `lib/reports.js` |
 | Real Terms and Privacy pages | Full Terms of use and a Privacy notice written for the Data Protection Act, 2019, with a summary and contents, replacing the placeholders | `terms-page.jsx`, `privacy-page.jsx`, `legal-layout.jsx` |
+| API contract | `api/openapi.yaml`: every service function as an endpoint with exact request and response shapes and error messages, and a test that keeps the mocks and the contract in step | `../api/`, section 11 |
 
 Also added at the school's request: **trip times** by grade (several pickups and drop-offs a day), **new applications** kept apart from students who need a route, the driver's **boarding check** at school with absences carried through the day, and no *Absent* button on drop-offs.
 
