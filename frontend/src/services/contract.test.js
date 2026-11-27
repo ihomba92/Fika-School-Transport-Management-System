@@ -4,11 +4,15 @@ import { parse } from 'yaml'
 import { beforeAll, describe, expect, test, vi } from 'vitest'
 
 // Checks that every mock service answers in the shape api/openapi.yaml
-// promises, so the front end and the Flask API can't drift apart. When
+// promises, so the front end and the Flask API can't drift apart. The
+// requests go through api-client.js to the mock server, signed in as each
+// role, exactly as the app sends them. When
 // this fails, either the mock or the contract is wrong: fix one of them,
 // on purpose.
 
-vi.mock('./mock-network', () => ({ simulateNetwork: () => Promise.resolve() }))
+vi.mock('@/mocks/mock-network', () => ({
+  simulateNetwork: () => Promise.resolve(),
+}))
 
 const spec = parse(
   readFileSync(new URL('../../../api/openapi.yaml', import.meta.url), 'utf8'),
@@ -37,7 +41,8 @@ const pointer = (path, method, status) =>
     .map((part) => part.replaceAll('~', '~0').replaceAll('/', '~1'))
     .join('/')
 
-// What the browser would receive: Dates become ISO strings.
+// What the server sent: the client turned instants into Dates; JSON puts
+// them back.
 const overTheWire = (value) => JSON.parse(JSON.stringify(value))
 
 function expectShape(value, path, method = 'get', status = '200') {
@@ -53,8 +58,11 @@ function expectShape(value, path, method = 'get', status = '200') {
 }
 
 let services
+const signIn = (email) => services.auth.logIn({ email, password: 'Fika2026!' })
+
 beforeAll(async () => {
   services = {
+    auth: await import('./auth-service'),
     parent: await import('./parent-service'),
     driver: await import('./driver-service'),
     admin: await import('./admin-service'),
@@ -67,6 +75,8 @@ beforeAll(async () => {
 const ALL = { search: '', grade: 'all', plan: 'all', bus: 'all', fees: 'all' }
 
 describe('parent', () => {
+  beforeAll(() => signIn('parent@example.com'))
+
   test('family, child, term', async () => {
     const { parent } = services
     const family = await parent.getFamily()
@@ -88,6 +98,8 @@ describe('parent', () => {
 })
 
 describe('driver', () => {
+  beforeAll(() => signIn('driver@example.com'))
+
   test('day, active trip, profile', async () => {
     const { driver } = services
     expectShape(await driver.getDriverDay(), '/driver/day')
@@ -97,6 +109,8 @@ describe('driver', () => {
 })
 
 describe('admin', () => {
+  beforeAll(() => signIn('admin@example.com'))
+
   test('live map and dashboard', async () => {
     const { admin } = services
     expectShape(await admin.getLiveBuses(), '/admin/live')

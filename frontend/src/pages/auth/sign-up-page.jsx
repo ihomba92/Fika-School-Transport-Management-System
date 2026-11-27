@@ -29,6 +29,7 @@ export function SignUpPage() {
     register,
     control,
     handleSubmit,
+    setError,
     formState: { errors, isSubmitting },
   } = useForm({
     resolver: zodResolver(signUpSchema),
@@ -41,7 +42,10 @@ export function SignUpPage() {
       const { email } = await signUp(values)
       navigate('/check-email', { state: { email } })
     } catch (error) {
-      setFormError(error.message)
+      // A 422 names the fields; anything else is one message for the form.
+      const fields = Object.entries(error.fields ?? {})
+      for (const [name, message] of fields) setError(name, { message })
+      if (fields.length === 0) setFormError(error.message)
     }
   }
 

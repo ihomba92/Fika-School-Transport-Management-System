@@ -9,7 +9,7 @@ export function useFinishSignIn() {
   const navigate = useNavigate()
   const location = useLocation()
 
-  // `login` is what the API returns: { user, accessToken, refreshToken }.
+  // `login` is { user }: auth-service already kept the access token.
   return function finishSignIn(login) {
     saveLogin(login)
     const home = ROLE_HOME[login.user.role]

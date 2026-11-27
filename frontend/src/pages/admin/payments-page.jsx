@@ -9,7 +9,9 @@ import { PageLoading } from '@/components/common/page-loading'
 import { PageHeader } from '@/components/layout/page-header'
 import { useServiceData } from '@/hooks/use-service-data'
 import { toCsv } from '@/lib/csv'
+import { toDateKey } from '@/lib/dates'
 import { formatKes, formatKesCompact } from '@/lib/format'
+import { nairobiMinutes, toClock } from '@/lib/trip-times'
 import {
   getPaymentsOverview,
   listTermPayments,
@@ -107,7 +109,8 @@ async function downloadStatement(term) {
       'Status',
     ],
     ...payments.map((p) => [
-      p.paidAt.slice(0, 16).replace('T', ' '),
+      // Nairobi time, as the office reads it: 2026-10-13 06:41
+      `${toDateKey(p.paidAt)} ${toClock(nairobiMinutes(p.paidAt))}`,
       p.receipt,
       p.studentName,
       p.payer.name,

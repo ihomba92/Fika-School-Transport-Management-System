@@ -79,12 +79,12 @@ This folder is the **React front end**. It is complete and runs on its own using
 
 | Tool | Version | What it does here |
 |---|---|---|
-| [Vitest](https://vitest.dev) | 5.1 | Unit tests (197 tests in 36 files). |
+| [Vitest](https://vitest.dev) | 5.1 | Unit tests (210 tests in 37 files). |
 | [Ajv](https://ajv.js.org) + [yaml](https://eemeli.org/yaml/) | 8 / 2 | The contract test: checks the mock services' answers against `../api/openapi.yaml`. |
 | [Testing Library](https://testing-library.com) + jsdom | — | Installed for component tests. |
 | [Oxlint](https://oxc.rs) | 1.90 | Linting (`npm run lint`), including React Hooks and fast-refresh rules. |
 | [Prettier](https://prettier.io) + prettier-plugin-tailwindcss | 3.10 | Formatting: no semicolons, single quotes, Tailwind classes sorted. |
-| Playwright (outside this repo) | — | Browser walkthroughs of each module at 360, 390 and 1440 px, in light and dark mode. |
+| [Playwright](https://playwright.dev) | 1.6x | End-to-end journeys in `e2e/`, on a phone (Pixel 7) and a desktop screen. |
 
 ### Browser APIs used
 
@@ -126,8 +126,11 @@ To test on a phone on the same Wi‑Fi, run `npm run dev -- --host` and open the
 | `npm run preview` | Serves the `dist/` build locally, to check it before deploying. |
 | `npm test` | Runs all unit tests once. |
 | `npm run test:watch` | Re-runs tests as you save. |
+| `npm run test:e2e` | Runs the end-to-end journeys in a real browser (Playwright), on a phone and a desktop screen. Add `-- --ui` to watch them step by step. |
 | `npm run lint` | Oxlint. The only expected warning is the known one in shadcn's `button.jsx`. |
-| `npx prettier --write src` | Formats the code. |
+| `npx prettier --write src e2e` | Formats the code. |
+
+The first time, Playwright needs its browser: `npx playwright install --with-deps chromium`.
 
 If the browser shows *"Failed to fetch dynamically imported module"* after pulling new files, stop the dev server, delete `node_modules/.vite`, start it again and hard-reload the page.
 
@@ -158,22 +161,29 @@ Mock services wait a moment before answering (`src/services/mock-network.js`), s
 frontend/
 ├── public/                 PWA icons and favicon
 ├── index.html
-├── vite.config.js          React, Tailwind and PWA plugins; the @ alias
+├── vite.config.js          React, Tailwind and PWA plugins; the @ alias; /api proxy
+├── playwright.config.js    End-to-end test settings (phone and desktop)
+├── .env.example            VITE_API_URL: leave unset for the mock server
 ├── .oxlintrc.json, .prettierrc
+├── e2e/                    End-to-end journeys (Playwright) and their helpers
 └── src/
     ├── main.jsx            App entry: theme, auth provider, router, toaster
     ├── index.css           Tailwind import and theme tokens (light and dark)
     ├── app/router.jsx      Every web address, per role
-    ├── auth/               JWT session (AuthProvider), RequireRole guard
+    ├── auth/               Who is signed in (AuthProvider), RequireRole guard
     ├── i18n/               English / Kiswahili setup; locales/sw.json holds the Kiswahili
     ├── config/             Navigation menus per role, transport plans, grades, legal (who provides Fika)
-    ├── data/               Sample data for the mock services (goes with the back end)
-    ├── services/           One file per area; the only place that "talks to the server"
-    │                       (admin, fleet, payments, reports, parent, driver, auth;
+    ├── data/               Sample data for the mock server (goes with the back end)
+    ├── services/           One file per area; each function is one API request
+    │                       (admin, fleet, payments, reports, parent, driver, auth),
+    │                       plus the contract test
+    ├── mocks/              The mock server: answers the API's requests in the
+    │                       browser until Flask exists (server.js routes them;
     │                       admin-store and attendance-store play the database)
     ├── hooks/              Reusable logic: polling, location sharing, wake lock, clocks…
     ├── lib/                Pure business logic with unit tests (trip times, shifts,
     │                       fees, grouping, trips, reports…)
+    │   ├── api-client.js   The one request helper: base URL, token, refresh, errors
     │   └── validation/     Zod schemas for every form, with tests
     ├── components/
     │   ├── ui/             shadcn/ui components
@@ -196,9 +206,11 @@ frontend/
 
 ## 7. How the app is built
 
-**Layers.** A page calls a **service** (`src/services/*`), which today reads sample data and later calls the Flask API. Rules that need to be right — who is overdue, which bus is full, how a route is retimed — live in **`src/lib/`** as plain functions with unit tests, so they are easy to check and can be mirrored on the server. Pages and components only display data and handle clicks.
+**Layers.** A page calls a **service** (`src/services/*`). Each service function is one request through **`src/lib/api-client.js`** to an endpoint in [`../api/openapi.yaml`](../api/openapi.yaml). Until Flask exists, `api-client.js` hands the request to the **mock server** in `src/mocks/`, which answers as Flask will: same paths, JSON, status codes, errors and tokens. Setting `VITE_API_URL` switches to the real API, with no change to services or pages. Rules that need to be right — who is overdue, which bus is full, how a route is retimed — live in **`src/lib/`** as plain functions with unit tests, so they are easy to check and can be mirrored on the server. Pages and components only display data and handle clicks.
 
-**Authentication (JWT).** Logging in returns an access token (short-lived, sent as `Authorization: Bearer …`), a refresh token and the user's name, email and role. They are kept in `localStorage` so a refresh doesn't log you out. `RequireRole` sends logged-out visitors to *Log in* (and back afterwards) and sends the wrong role to their own Home. This is only for a good experience: the back end must check the token and role on every request.
+**The request helper.** `api-client.js` adds the base URL, `Authorization: Bearer …` and `Accept-Language` (EN or SW) to every request; turns `204` into `null` and ISO times into `Date`s; and turns error answers into an `ApiError` whose `message` is the sentence to show (translated where it is shown) and whose `fields` go onto form fields (`lib/form-errors.js`). No internet gives *"Check your internet connection and try again."*
+
+**Authentication (JWT)** — decided in [`../api/decisions/0001-sign-in-tokens.md`](../api/decisions/0001-sign-in-tokens.md). Logging in returns a 15-minute access token, which lives **only in memory** inside `api-client.js`, and sets the refresh token as an **HttpOnly cookie** that JavaScript can't read. When the app opens or reloads, `AuthProvider` calls `/auth/refresh` once (a spinner shows meanwhile) to sign the person back in from the cookie. When a token expires mid-use, `api-client.js` refreshes it once and repeats the request; if that fails, the log in page says the session has ended. Nothing about the session is stored in `localStorage` (the mock server keeps its stand-in for the cookie under its own key). `RequireRole` sends logged-out visitors to *Log in* (and back afterwards) and sends the wrong role to their own Home. This is only for a good experience: the back end must check the token and role on every request.
 
 **Routing.** Each role has its own area (`/admin`, `/driver`, `/parent`) inside `AppLayout` (sidebar on desktop, menu on phones). Sign-in screens sit inside `AuthLayout`, whose black panel shows the bus-stop animation. Every page is lazy-loaded.
 
@@ -307,15 +319,17 @@ These live in `src/lib/` and are covered by unit tests:
 ## 10. Testing and code quality
 
 ```bash
-npm test          # 197 unit tests, including the API contract check
+npm test          # 210 unit tests, including the API contract check
+npm run test:e2e  # the end-to-end journeys in a real browser
 npm run lint      # Oxlint
 npm run build     # must build without errors
 ```
 
 - **Unit tests** sit next to the code they test (`*.test.js`): trip times, shifts, fees, grouping, stop order, route fit, trips, reports, low-data detection, the landing animation's timeline, formatting (English and Kiswahili), CSV export, the text helpers behind applications, student status and reports, and every Zod schema.
+- **Request helper**: `src/lib/api-client.test.js` covers signing in, a reload signing back in from the cookie, logging out, an expired token being refreshed once for several waiting requests, the session ending when the cookie is gone, wrong-role refusals, `204`, dates and error messages.
+- **End-to-end journeys** (`e2e/`, Playwright): signing in, staying signed in after a reload, and logging out; a parent signing up; a parent adding a child; the office accepting that child and placing them on a bus, then the parent seeing the bus; declining and reconsidering an application; a driver's pickup; *absent at pickup stays absent* through the boarding check and the drop-off; a child not at boarding; and a parent paying by M-Pesa. Each runs on a phone screen and a desktop screen (office journeys on desktop only). They click through a production build, so they test what parents and drivers get.
 - **API contract check**: `src/services/contract.test.js` calls every mock service that reads data and checks its answer against `../api/openapi.yaml`, and fails if a service function has no endpoint there. Change a mock's shape and the contract together, or the test fails.
 - **Translation check**: `src/i18n/i18n.test.js` fails if any parent, driver or sign-in text has no Kiswahili, or a translation drops a `{{placeholder}}`.
-- **Browser walkthroughs** with Playwright cover each module (schedule and trip times, route editing, applications and placement, payments, fee settings, reports, parent with Kiswahili and low-data mode, driver with the boarding check) at phone and desktop widths, in both themes.
 - **Conventions**: one component per file, text helpers in `.js` files (so component files export only components), `useWatch` rather than `watch` in forms, comments that explain *why*, and Prettier formatting.
 
 ---
@@ -324,13 +338,15 @@ npm run build     # must build without errors
 
 **The contract is [`../api/openapi.yaml`](../api/openapi.yaml)** (OpenAPI 3.1). It has one endpoint for every function in `src/services/` (its `operationId` is the function's name), with the request body, the response's exact shape and every error code and message. Open it in [Swagger Editor](https://editor.swagger.io), with the VS Code *OpenAPI (Swagger) Editor* extension, or as a docs page with `npx @redocly/cli preview-docs ../api/openapi.yaml`. [`../api/README.md`](../api/README.md) lists the endpoints as a checklist for building the Flask API.
 
-The plan:
+The front end is ready for it: every service already sends real requests through `src/lib/api-client.js`, answered for now by the mock server in `src/mocks/`. The plan:
 
-1. Add `VITE_API_URL` to a `.env` file and a small `api.js` helper that adds the `Authorization: Bearer` header and `Accept-Language`, refreshes the access token when it expires, turns the contract's `date-time` fields into `Date`s, and throws the server's `error.message` (pages already show it, translated).
-2. Replace the body of each function in `src/services/*` with a real request, one area at a time. The function names and return shapes stay the same, so pages don't change. The contract's *Changes the front end needs* list covers the few that change (M-Pesa polling, Google's ID token, the reset-password token).
-3. Delete `src/data/` sample files, `mock-network.js` and the sample clock (`sampleNow` → `new Date()`).
-4. Connect real Google sign-in, M‑Pesa (Daraja STK push and callbacks), Firebase push notifications and Brevo email.
-5. Repeat every rule from `src/lib/` on the server, with the same test cases: the front end's checks are for a good experience, the server's are for security. The contract lists which rule lives in which file.
+1. Build the Flask endpoints in the order of [`../api/README.md`](../api/README.md), with the sign-in cookies from [decision 0001](../api/decisions/0001-sign-in-tokens.md).
+2. Point the front end at Flask: copy `.env.example` to `.env.local` and set `VITE_API_URL=/api/v1` (Vite's proxy passes `/api` to `localhost:5000`). Pages and services don't change.
+3. Run `npm run test:e2e` against it. The journeys are the same; only the sample accounts must exist in Flask's test data. Fix what fails, one area at a time.
+4. The few places where the real API differs from the mock are in the contract's *Changes the front end needs* list (Google's ID token, the reset-password token, M-Pesa's callback). The M-Pesa polling is already built.
+5. Delete `src/mocks/`, `src/data/` and the sample clock (`sampleNow` → `new Date()`) once nothing uses them.
+6. Connect real Google sign-in, M‑Pesa (Daraja STK push and callbacks), Firebase push notifications and Brevo email.
+7. Repeat every rule from `src/lib/` on the server, with the same test cases: the front end's checks are for a good experience, the server's are for security. The contract lists which rule lives in which file.
 
 What the newer screens need in the database:
 
@@ -355,6 +371,9 @@ What the newer screens need in the database:
 | Monthly reports | On-time performance by route and trip time, bus occupancy and fee collection, with PDF (print) and CSV export | `/admin/reports`, `lib/reports.js` |
 | Real Terms and Privacy pages | Full Terms of use and a Privacy notice written for the Data Protection Act, 2019, with a summary and contents, replacing the placeholders | `terms-page.jsx`, `privacy-page.jsx`, `legal-layout.jsx` |
 | API contract | `api/openapi.yaml`: every service function as an endpoint with exact request and response shapes and error messages, and a test that keeps the mocks and the contract in step | `../api/`, section 11 |
+| How sign-in tokens are kept | Access token in memory, refresh token in an HttpOnly cookie; reloads sign back in from the cookie | `api/decisions/0001-sign-in-tokens.md`, `src/auth/` |
+| One request helper | `api-client.js`: base URL, token, one shared refresh, `Accept-Language`, dates, `ApiError`; every service is one request; a mock server answers until Flask exists | `src/lib/api-client.js`, `src/mocks/` |
+| End-to-end tests | Playwright journeys for parents, the office and drivers, on phone and desktop | `e2e/`, `npm run test:e2e` |
 
 Also added at the school's request: **trip times** by grade (several pickups and drop-offs a day), **new applications** kept apart from students who need a route, the driver's **boarding check** at school with absences carried through the day, and no *Absent* button on drop-offs.
 
@@ -366,7 +385,6 @@ Also added at the school's request: **trip times** by grade (several pickups and
 - **Legal review**: have a Kenyan advocate review the Terms and the Privacy notice, and the school confirm its details in `src/data/school.js` (privacy email, address), its fee and refund rules, and the retention periods. Register the school (controller) and Fika (processor) with the ODPC if their size requires it, and sign a processing contract between them.
 - **Legal pages in Kiswahili**: the Terms and the Privacy notice are English only for now; add a Kiswahili version once the English text is final.
 - **Landing page photo**: serve `src/assets/hero-buses.jpg` as WebP/AVIF with `srcset` for faster phones.
-- **Dependencies**: run `npm audit` and update the packages behind the 7 moderate warnings.
 - **Error monitoring**: add Sentry (or similar) so crashes on parents' and drivers' phones are reported.
 
 **Reliability**
@@ -374,14 +392,14 @@ Also added at the school's request: **trip times** by grade (several pickups and
 - **Data fetching**: replace the hand-written `useServiceData` / `usePolling` hooks with **TanStack Query** for caching, retries, background refresh and less code.
 - **Driver offline mode**: queue "on board" / "dropped off" taps and GPS points when the network drops (common on some routes) and send them when it returns. Workbox background sync fits the existing PWA setup.
 - **Live updates**: move the 10‑second polling to Server-Sent Events or WebSockets (Flask-SocketIO with Redis) to cut data use and show changes sooner.
-- **Token storage**: tokens in `localStorage` can be read by any script that runs on the page (XSS). Keep a strict Content-Security-Policy, and consider holding the access token in memory only while the refresh token stays as it is.
 
 **Code quality**
 
 - **TypeScript** (or JSDoc types checked by `tsc`) would catch shape mistakes when the real API is connected.
 - **Mock Service Worker (MSW)** instead of mock services, so the same mocks work in tests, Storybook and the browser without touching the services.
-- **Component and end-to-end tests in the repo**: add Testing Library tests for key components, and move the Playwright walkthroughs into the project (`npm run test:e2e`) with a GitHub Actions workflow that runs lint, tests and build on every push.
-- **Accessibility checks** with axe (`@axe-core/playwright`) in those end-to-end tests.
+- **Component tests**: add Testing Library tests for key components (the boarding check, the child form).
+- **Continuous checks**: `.github/workflows/frontend.yml` runs lint, the unit tests, the build and the end-to-end journeys on GitHub for every push. Make the `main` branch require it to pass before merging.
+- **Accessibility checks** with axe (`@axe-core/playwright`) in the end-to-end tests.
 - **Storybook** for the shared components (badges, cards, the trip and fee pieces).
 
 **Product**

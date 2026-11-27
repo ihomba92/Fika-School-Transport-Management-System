@@ -15,17 +15,28 @@ import { childSchema } from '@/lib/validation/child-schema'
 import { PlaceFields } from './place-fields'
 import { PlanOption } from './plan-option'
 import { useTranslation } from 'react-i18next'
+import { showServerErrors } from '@/lib/form-errors'
 
 // The form for adding or editing a child. `onSave` receives checked values
-// in the shape the service expects (see child-schema.js).
+// in the shape the service expects (see child-schema.js). If it throws, the
+// server's message goes on the fields it names, or into a toast.
 export function ChildForm({ defaultValues, termFee, submitLabel, onSave }) {
   const { t } = useTranslation()
   const {
     register,
     control,
     handleSubmit,
+    setError,
     formState: { errors, isSubmitting },
   } = useForm({ resolver: zodResolver(childSchema), defaultValues })
+
+  async function submit(values) {
+    try {
+      await onSave(values)
+    } catch (error) {
+      showServerErrors(error, { setError, t })
+    }
+  }
 
   // useWatch re-renders only when these fields change, so the form can show
   // or hide the pickup and drop-off sections as the plan changes.
@@ -39,7 +50,7 @@ export function ChildForm({ defaultValues, termFee, submitLabel, onSave }) {
   return (
     <Card
       as="form"
-      onSubmit={handleSubmit(onSave)}
+      onSubmit={handleSubmit(submit)}
       noValidate
       className="flex flex-col gap-8 p-6 sm:p-8"
     >

@@ -41,16 +41,36 @@ info:
 
     ## Signing in
 
-    `POST /auth/login` returns a short-lived **access token** (JWT, 15
-    minutes) and a **refresh token** (30 days). Every other request sends
-    `Authorization: Bearer <accessToken>`. When a request answers `401`
-    with code `TOKEN_EXPIRED`, the front end calls `POST /auth/refresh`
-    once and repeats the request; if that fails too, it signs the person
-    out. Each role has its own path prefix (`/parent`, `/driver`,
-    `/admin`) and the server checks the token's role on every request
-    (`403 WRONG_ROLE` otherwise). A parent or driver only ever sees their
-    own family or their own bus: the server filters by the signed-in
-    account, never by ids sent from the browser.
+    The full reasoning is in `api/decisions/0001-sign-in-tokens.md`.
+
+    - Logging in returns a short-lived **access token** (JWT, 15 minutes)
+      in the JSON body. The front end keeps it **in memory only** (never
+      in `localStorage`) and sends it on every request as
+      `Authorization: Bearer <accessToken>`.
+    - The **refresh token** (30 days) never reaches JavaScript: the server
+      sets it as a cookie, `fika_refresh`, with `HttpOnly; Secure;
+      SameSite=Strict; Path=/api/v1/auth`. It is rotated on every
+      refresh; an old one is accepted for 30 seconds more (two tabs
+      opening at once), after that using it again revokes the session.
+    - **Opening the app** (or reloading the page) calls `POST
+      /auth/refresh` once: the cookie gives back an access token and the
+      user, so people stay signed in for 30 days without a stored token.
+    - When a request answers `401 TOKEN_EXPIRED`, the request helper
+      calls `POST /auth/refresh` once (one call for all waiting requests)
+      and repeats the request. If the refresh fails, the person is signed
+      out and sees the log in page.
+    - `POST /auth/refresh` and `POST /auth/logout` are the only requests
+      that use the cookie. They must carry the header `X-Fika-Client: web`,
+      which a page on another site can't send without CORS allowing it
+      (CSRF protection, together with `SameSite=Strict`).
+    - The front end and the API are served from the **same site**
+      (`fika.co.ke` and `api.fika.co.ke`, or one origin with `/api`
+      proxied). In development, Vite proxies `/api` to Flask on port 5000.
+    - Each role has its own path prefix (`/parent`, `/driver`, `/admin`)
+      and the server checks the token's role on every request (`403
+      WRONG_ROLE` otherwise). A parent or driver only ever sees their own
+      family or their own bus: the server filters by the signed-in
+      account, never by ids sent from the browser.
 
     ## Errors
 
@@ -100,28 +120,26 @@ info:
     | Student search and filters | `lib/student-filters.js` |
     | Monthly report figures | `lib/reports.js` |
 
-    ## Changes the front end needs when it switches to this API
+    ## The front end and this contract
 
-    These are the places where the mock takes a shortcut the real API
-    can't:
+    Every function in `frontend/src/services/` already sends its request
+    through `frontend/src/lib/api-client.js`, exactly as described here.
+    Until `VITE_API_URL` is set, a mock server in `frontend/src/mocks/`
+    answers in the browser; `services/contract.test.js` checks its answers
+    against this file. Already built on the front end: the M-Pesa polling,
+    the `signupToken` and reset-password `token`, `Accept-Language`, the
+    refresh cookie flow, and turning instants into `Date`s.
 
-    1. **M-Pesa** is asynchronous: `payWithMpesa` posts the request
-       (`202`), then polls `GET /parent/payments/mpesa/{checkoutRequestId}`
-       every 3 s until it isn't `pending` (give up after 90 s). It must
-       also send the `phone` the form already collects.
-    2. **Google sign-in** sends Google's ID token (`credential`) to
-       `POST /auth/google`. When the account is new, the answer carries a
-       `signupToken`, and `completeProfile` sends that instead of the
-       email.
-    3. **Password reset** sends the `token` from the emailed link
-       (`/reset-password?token=…`) with the new password.
-    4. **Email verification** links point at the API
+    Still to change when Flask is connected:
+
+    1. **Google sign-in** sends a placeholder `credential`; it must send the
+       ID token from Google Identity Services.
+    2. **Email verification** links point at the API
        (`GET /auth/verify-email?token=…`), which redirects to `/login`
        or to `/link-expired`.
-    5. **Student lists** get `morningRoute` / `eveningRoute` as
-       `{ id, name }` only; no screen uses their stops.
-    6. **Instants** arrive as strings; the request helper turns the
-       `date-time` fields into `Date` objects.
+    3. **Student lists**: the mock still sends whole routes as
+       `morningRoute` / `eveningRoute`; the API sends `{ id, name }` only
+       (no screen uses their stops).
 servers:
   - url: http://localhost:5000/api/v1
     description: Flask on your computer
@@ -168,6 +186,8 @@ paths:
       responses:
         '200':
           description: Signed in.
+          headers:
+            Set-Cookie: { $ref: '#/components/headers/RefreshCookie' }
           content:
             application/json:
               schema: { $ref: '#/components/schemas/LoginResponse' }
@@ -282,7 +302,11 @@ paths:
                 credential: { type: string, description: Google's ID token (JWT). }
       responses:
         '200':
-          description: Either signed in, or a new account that needs a phone number and consent.
+          description: Either signed in (and the refresh cookie set), or a new account that needs a phone number and consent.
+          headers:
+            Set-Cookie:
+              description: Set only when signed in.
+              schema: { type: string }
           content:
             application/json:
               schema:
@@ -320,6 +344,8 @@ paths:
       responses:
         '201':
           description: Parent account created and signed in (Google already verified the email).
+          headers:
+            Set-Cookie: { $ref: '#/components/headers/RefreshCookie' }
           content:
             application/json:
               schema: { $ref: '#/components/schemas/LoginResponse' }
@@ -377,48 +403,50 @@ paths:
   /auth/refresh:
     post:
       tags: [Auth]
-      operationId: refreshToken
-      summary: Get a new access token
-      description: Called by the request helper, not by a page. The refresh token is rotated.
-      security: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [refreshToken]
-              properties:
-                refreshToken: { type: string }
+      operationId: restoreSession
+      summary: Get a new access token from the refresh cookie
+      description: |
+        Called when the app opens, and by the request helper when an
+        access token has expired; never by a page. Rotates the refresh
+        cookie. Needs the `X-Fika-Client: web` header.
+      security:
+        - refreshCookie: []
+      parameters:
+        - $ref: '#/components/parameters/ClientHeader'
       responses:
         '200':
-          description: New tokens.
+          description: A new access token, and the user (so a reloaded page knows who is signed in).
+          headers:
+            Set-Cookie: { $ref: '#/components/headers/RefreshCookie' }
           content:
             application/json:
-              schema:
-                type: object
-                required: [accessToken, refreshToken]
-                properties:
-                  accessToken: { type: string }
-                  refreshToken: { type: string }
-        '401': { $ref: '#/components/responses/Unauthenticated' }
+              schema: { $ref: '#/components/schemas/LoginResponse' }
+        '401':
+          description: '`UNAUTHENTICATED`: no cookie, or an expired or revoked one. The front end shows the log in page, with no message.'
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+        '403':
+          description: '`MISSING_CLIENT_HEADER`: the `X-Fika-Client` header is missing.'
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
 
   /auth/logout:
     post:
       tags: [Auth]
       operationId: logOut
       summary: Log out on this device
-      description: Revokes the refresh token sent. Always `204`.
-      requestBody:
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                refreshToken: { type: string }
+      description: 'Revokes the refresh token in the cookie and clears the cookie. Always `204`, even without a cookie. Needs the `X-Fika-Client: web` header.'
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/ClientHeader'
       responses:
-        '204': { description: Logged out. }
-        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '204':
+          description: Logged out.
+          headers:
+            Set-Cookie:
+              description: '`fika_refresh=; Max-Age=0; Path=/api/v1/auth` (clears the cookie).'
+              schema: { type: string }
+        '403':
+          description: '`MISSING_CLIENT_HEADER`.'
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
 
   /me:
     get:
@@ -1792,8 +1820,23 @@ components:
       type: http
       scheme: bearer
       bearerFormat: JWT
+    refreshCookie:
+      type: apiKey
+      in: cookie
+      name: fika_refresh
+
+  headers:
+    RefreshCookie:
+      description: '`fika_refresh=<token>; HttpOnly; Secure; SameSite=Strict; Path=/api/v1/auth; Max-Age=2592000`'
+      schema: { type: string }
 
   parameters:
+    ClientHeader:
+      name: X-Fika-Client
+      in: header
+      required: true
+      description: Always `web`. Protects the cookie requests from other sites (CSRF).
+      schema: { type: string, const: web }
     ChildId: { name: childId, in: path, required: true, schema: { type: string } }
     StudentId: { name: studentId, in: path, required: true, schema: { type: string } }
     RiderId: { name: riderId, in: path, required: true, description: The student's id., schema: { type: string } }
@@ -1906,11 +1949,11 @@ components:
         language: { type: string, enum: [en, sw] }
     LoginResponse:
       type: object
-      required: [user, accessToken, refreshToken]
+      required: [user, accessToken]
+      description: The refresh token is never in the body; it comes as the `fika_refresh` cookie.
       properties:
         user: { $ref: '#/components/schemas/User' }
-        accessToken: { type: string }
-        refreshToken: { type: string }
+        accessToken: { type: string, description: 'JWT, 15 minutes. Keep it in memory only.' }
 
     # ── School set-up ─────────────────────────────────────────────────────
     Term:

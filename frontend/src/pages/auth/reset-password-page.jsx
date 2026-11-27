@@ -1,6 +1,6 @@
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
-import { useNavigate } from 'react-router'
+import { useNavigate, useSearchParams } from 'react-router'
 import { toast } from 'sonner'
 import { PageHeader } from '@/components/layout/page-header'
 import { FormField } from '@/components/auth/form-field'
@@ -17,6 +17,8 @@ import { useTranslation } from 'react-i18next'
 export function ResetPasswordPage() {
   const { t } = useTranslation()
   const navigate = useNavigate()
+  // The emailed link is /reset-password?token=…
+  const [params] = useSearchParams()
   const {
     register,
     handleSubmit,
@@ -24,7 +26,16 @@ export function ResetPasswordPage() {
   } = useForm({ resolver: zodResolver(resetPasswordSchema) })
 
   async function onSubmit(values) {
-    await resetPassword(values)
+    try {
+      await resetPassword({ ...values, token: params.get('token') })
+    } catch (error) {
+      if (error.code === 'LINK_EXPIRED') {
+        navigate('/link-expired', { replace: true })
+        return
+      }
+      toast.error(t(error.message))
+      return
+    }
     toast.success(t('Password changed'), {
       description: t('Log in with your new password.'),
     })

@@ -1,47 +1,72 @@
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { onSessionEnded } from '@/lib/api-client'
+import {
+  logOut as endServerSession,
+  restoreSession,
+} from '@/services/auth-service'
 import { AuthContext } from './auth-context'
 
-const STORAGE_KEY = 'fika-auth'
-
-// Fika uses JWTs (Flask-JWT-Extended). Logging in returns:
-//   accessToken  short-lived (about 15 min); sent with every API request as
-//                `Authorization: Bearer <token>`
-//   refreshToken longer-lived; used only to get a new access token
-//   user         name, email and role, for showing on screen
-// They are kept in localStorage so a page refresh doesn't log you out.
-// The server checks the token's signature and role on every request; the
-// `user` here is only for display and never trusted for access.
-function readStoredLogin() {
-  try {
-    return JSON.parse(localStorage.getItem(STORAGE_KEY))
-  } catch {
-    return null
-  }
-}
-
+// Who is signed in, for the screens. The tokens themselves never come here
+// (api/decisions/0001-sign-in-tokens.md): the access token lives inside
+// api-client.js, and the refresh token is an HttpOnly cookie.
+//
+// status: 'checking' while the app asks the API whether the refresh cookie
+// still signs someone in (once, when the app opens), then 'signed-in' or
+// 'signed-out'. `user` is only for display; the server checks every request.
 export function AuthProvider({ children }) {
-  const [login, setLogin] = useState(readStoredLogin)
+  const [session, setSession] = useState({ status: 'checking', user: null })
+  // Set when the API ended the session (not when the person logged out), so
+  // the log in page can say why.
+  const [hasExpired, setHasExpired] = useState(false)
 
-  const saveLogin = useCallback(({ user, accessToken, refreshToken }) => {
-    const next = { user, accessToken, refreshToken }
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(next))
-    setLogin(next)
+  useEffect(() => {
+    // Tokens from before this change lived in localStorage; drop them.
+    localStorage.removeItem('fika-auth')
+
+    let isCurrent = true
+    restoreSession()
+      .then(({ user }) => {
+        if (isCurrent) setSession({ status: 'signed-in', user })
+      })
+      .catch(() => {
+        if (isCurrent) setSession({ status: 'signed-out', user: null })
+      })
+    const stopListening = onSessionEnded(() => {
+      setHasExpired(true)
+      setSession({ status: 'signed-out', user: null })
+    })
+    return () => {
+      isCurrent = false
+      stopListening()
+    }
   }, [])
 
-  // With the back end, this also tells the API to revoke the refresh token.
-  const logOut = useCallback(() => {
-    localStorage.removeItem(STORAGE_KEY)
-    setLogin(null)
+  const saveLogin = useCallback(({ user }) => {
+    setHasExpired(false)
+    setSession({ status: 'signed-in', user })
+  }, [])
+
+  // Waits for the server to revoke the refresh cookie, so reopening the app
+  // straight away can't sign back in.
+  const logOut = useCallback(async () => {
+    try {
+      await endServerSession()
+    } catch {
+      // Offline: the cookie stays valid until it expires (30 days), but this
+      // device forgets the access token now.
+    }
+    setSession({ status: 'signed-out', user: null })
   }, [])
 
   const value = useMemo(
     () => ({
-      user: login?.user ?? null,
-      accessToken: login?.accessToken ?? null,
+      status: session.status,
+      user: session.user,
+      hasExpired,
       saveLogin,
       logOut,
     }),
-    [login, saveLogin, logOut],
+    [session, hasExpired, saveLogin, logOut],
   )
 
   return <AuthContext value={value}>{children}</AuthContext>
