@@ -18,7 +18,11 @@ export function useGoogleSignIn() {
       const result = await continueWithGoogle()
       if (result.needsProfile) {
         navigate('/complete-profile', {
-          state: { email: result.email, name: result.name },
+          state: {
+            email: result.email,
+            name: result.name,
+            signupToken: result.signupToken,
+          },
         })
       } else {
         finishSignIn(result)

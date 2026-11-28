@@ -1,75 +1,81 @@
 import {
-  SAMPLE_ACCOUNTS,
-  SAMPLE_GOOGLE_USER,
-  SAMPLE_PASSWORD,
-} from '@/data/sample-accounts'
-import { simulateNetwork } from './mock-network'
+  api,
+  endSession,
+  refreshSession,
+  setAccessToken,
+} from '@/lib/api-client'
 
-// Stand-in for the Flask API until Module 1's back end exists.
-// Each function has the shape the real API call will have, so pages won't change
-// when these bodies are swapped for real requests.
+// Sign-in requests (api/openapi.yaml, Auth). The access token goes straight
+// into api-client.js's memory; pages only get the user. The refresh token is
+// a cookie the browser keeps (api/decisions/0001-sign-in-tokens.md).
 
-export class AuthError extends Error {}
-
-// The real API (Flask-JWT-Extended) answers a successful log in with signed
-// JWTs. The mock hands out placeholder strings in the same places.
-function loginResponse(user) {
-  return {
-    user,
-    accessToken: `mock-access-token.${user.email}`,
-    refreshToken: `mock-refresh-token.${user.email}`,
-  }
+function keepToken({ user, accessToken }) {
+  setAccessToken(accessToken)
+  return { user }
 }
 
 export async function logIn({ email, password }) {
-  await simulateNetwork()
-  const account = SAMPLE_ACCOUNTS.find((a) => a.email === email)
+  return keepToken(await api.post('/auth/login', { email, password }))
+}
 
-  // Same message for a wrong email or a wrong password, so nobody can discover
-  // which emails have accounts.
-  if (!account || password !== SAMPLE_PASSWORD) {
-    throw new AuthError('Email or password is incorrect.')
+// Called once when the app opens: signs the person back in from the
+// refresh cookie, or fails if there is none.
+export async function restoreSession() {
+  const { user } = await refreshSession()
+  return { user }
+}
+
+export async function logOut() {
+  try {
+    await api.post('/auth/logout', undefined, { withCookie: true })
+  } finally {
+    endSession()
   }
-  if (!account.emailVerified) {
-    throw new AuthError(
-      'Confirm your email first. We sent you a link when you signed up.',
-    )
-  }
-  return loginResponse({
-    name: account.name,
-    email: account.email,
-    role: account.role,
-  })
 }
 
-export async function signUp({ email }) {
-  await simulateNetwork()
-  if (SAMPLE_ACCOUNTS.some((a) => a.email === email)) {
-    throw new AuthError(
-      'An account with this email already exists. Try logging in.',
-    )
-  }
-  return { email }
+export async function signUp({ fullName, phone, email, password, consent }) {
+  return api.post('/auth/signup', { fullName, phone, email, password, consent })
 }
 
-export async function continueWithGoogle() {
-  await simulateNetwork()
-  return { ...SAMPLE_GOOGLE_USER, needsProfile: true }
+// `credential` is Google's ID token, from Google Identity Services once it
+// is connected. A new account comes back with a `signupToken` for
+// completeProfile.
+export async function continueWithGoogle(
+  credential = 'mock-google-credential',
+) {
+  const result = await api.post('/auth/google', { credential })
+  return result.needsProfile ? result : keepToken(result)
 }
 
-export async function completeProfile({ email, fullName }) {
-  await simulateNetwork()
-  return loginResponse({ name: fullName, email, role: 'parent' })
+export async function completeProfile({
+  signupToken,
+  fullName,
+  phone,
+  consent,
+}) {
+  return keepToken(
+    await api.post('/auth/complete-profile', {
+      signupToken,
+      fullName,
+      phone,
+      consent,
+    }),
+  )
 }
 
-export async function resendVerificationEmail() {
-  await simulateNetwork()
+// Saves the EN / SW choice, so emails, SMS and push notifications use it.
+export async function updateMe({ language }) {
+  return api.patch('/me', { language })
 }
 
-export async function requestPasswordReset() {
-  await simulateNetwork()
+export async function resendVerificationEmail(email) {
+  return api.post('/auth/resend-verification', { email })
 }
 
-export async function resetPassword() {
-  await simulateNetwork()
+export async function requestPasswordReset(email) {
+  return api.post('/auth/forgot-password', { email })
+}
+
+export async function resetPassword({ token, password }) {
+  return api.post('/auth/reset-password', { token, password })
 }

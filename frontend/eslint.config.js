@@ -18,6 +18,12 @@ export default defineConfig([
       parserOptions: { ecmaFeatures: { jsx: true } },
     },
   },
+    // Files that run in Node, not the browser: the build and test settings and
+  // the Playwright tests. They may use Node's globals, such as `process`.
+  {
+    files: ['*.config.js', 'e2e/**/*.js'],
+    languageOptions: { globals: globals.node },
+  },
     // shadcn/ui components are generated code: we don't edit them by hand.
   // Relax only the two rules its generator trips, and only in that folder.
   {

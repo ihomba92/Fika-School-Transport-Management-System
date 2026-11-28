@@ -12,6 +12,7 @@ import { PasswordInput } from '@/components/auth/password-input'
 import { SubmitButton } from '@/components/auth/submit-button'
 import { TextInput } from '@/components/auth/text-input'
 import { logInSchema } from '@/lib/validation/auth-schemas'
+import { useAuth } from '@/auth/auth-context'
 import { useFinishSignIn } from '@/hooks/use-finish-sign-in'
 import { useGoogleSignIn } from '@/hooks/use-google-sign-in'
 import { firstName } from '@/lib/format'
@@ -22,6 +23,7 @@ export function LoginPage() {
   const { t } = useTranslation()
   const finishSignIn = useFinishSignIn()
   const google = useGoogleSignIn()
+  const { hasExpired } = useAuth()
   const [formError, setFormError] = useState(null)
   const {
     register,
@@ -54,6 +56,11 @@ export function LoginPage() {
         description={t('Parents, drivers and school staff all log in here.')}
       />
 
+      {hasExpired && !formError && (
+        <FormAlert tone="success">
+          {t('Your session has ended. Log in again.')}
+        </FormAlert>
+      )}
       {(formError || google.error) && (
         <FormAlert>{t(formError || google.error)}</FormAlert>
       )}

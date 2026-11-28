@@ -31,7 +31,10 @@ export function CompleteProfilePage() {
   })
 
   async function onSubmit(values) {
-    const login = await completeProfile({ ...values, email: state?.email })
+    const login = await completeProfile({
+      ...values,
+      signupToken: state?.signupToken,
+    })
     toast.success(
       t('Welcome to Fika, {{name}}', { name: firstName(login.user.name) }),
       { description: t('Your profile is complete.') },

@@ -9,6 +9,11 @@ The front end's mock services already answer in these shapes, and
 `frontend/src/services/contract.test.js` checks that they keep doing so. When
 you change an answer, change the mock and this file together.
 
+## Decisions
+
+- [0001 · Where the sign-in tokens live](decisions/0001-sign-in-tokens.md):
+  access token in memory, refresh token in an HttpOnly cookie.
+
 ## Reading it
 
 - **In the browser**: paste the file into [Swagger Editor](https://editor.swagger.io).
@@ -27,11 +32,11 @@ the front end changes when it switches from the mocks.
 
 ## Endpoints to build
 
-73 endpoints. Tick them off as the Flask API answers each one; a good
-order is the same as the screens were built: Auth, then Admin · Fleet (the
-data everything else needs), Admin · Today, Parent, Driver, Payments and
-M‑Pesa, Reports. *new* marks endpoints with no mock yet: the request
-helper, M‑Pesa polling and Safaricom's callback.
+A good order is the order the screens were built: Auth, then Admin · Fleet
+(the data everything else needs), Admin · Today, Parent, Driver, Payments
+and M‑Pesa, Reports. *Front end* names the service function that sends the
+request; *none* means no screen calls it (Safaricom does, or a browser
+opens the link).
 
 ### Auth (12)
 
@@ -41,16 +46,16 @@ Sign-up, sign-in and passwords (`auth-service.js`). Public.
 |---|---|---|---|---|
 | ☐ | `POST` | `/auth/login` | `logIn` | Log in with email and password |
 | ☐ | `POST` | `/auth/signup` | `signUp` | Create a parent account |
-| ☐ | `GET` | `/auth/verify-email` | *new* | Open the link from the verification email |
+| ☐ | `GET` | `/auth/verify-email` | *none* | Open the link from the verification email |
 | ☐ | `POST` | `/auth/resend-verification` | `resendVerificationEmail` | Send the verification email again |
 | ☐ | `POST` | `/auth/google` | `continueWithGoogle` | Sign in or sign up with Google |
 | ☐ | `POST` | `/auth/complete-profile` | `completeProfile` | Finish a Google sign-up |
 | ☐ | `POST` | `/auth/forgot-password` | `requestPasswordReset` | Email a password-reset link |
 | ☐ | `POST` | `/auth/reset-password` | `resetPassword` | Set a new password from the emailed link |
-| ☐ | `POST` | `/auth/refresh` | *new* | Get a new access token |
-| ☐ | `POST` | `/auth/logout` | *new* | Log out on this device |
-| ☐ | `GET` | `/me` | *new* | The signed-in account |
-| ☐ | `PATCH` | `/me` | *new* | Save the account's language |
+| ☐ | `POST` | `/auth/refresh` | `restoreSession` | Get a new access token from the refresh cookie |
+| ☐ | `POST` | `/auth/logout` | `logOut` | Log out on this device |
+| ☐ | `GET` | `/me` | *none* | The signed-in account |
+| ☐ | `PATCH` | `/me` | `updateMe` | Save the account's language |
 
 ### Parent (12)
 
@@ -67,7 +72,7 @@ The parent app (`parent-service.js`). Role `parent`.
 | ☐ | `GET` | `/parent/trip/status` | `getTripStatus` | The same trip in a few hundred bytes, for Save data mode |
 | ☐ | `GET` | `/parent/payments` | `getPayments` | This term's successful payments, newest first |
 | ☐ | `POST` | `/parent/payments/mpesa` | `payWithMpesa` | Start an M-Pesa payment (STK push) |
-| ☐ | `GET` | `/parent/payments/mpesa/{checkoutRequestId}` | *new* | How an M-Pesa payment ended |
+| ☐ | `GET` | `/parent/payments/mpesa/{checkoutRequestId}` | *none* | How an M-Pesa payment ended |
 | ☐ | `GET` | `/parent/notifications` | `getNotifications` | The parent's notifications, newest first |
 | ☐ | `POST` | `/parent/notifications/read` | `markAllNotificationsRead` | Mark every notification read |
 
@@ -160,4 +165,4 @@ Called by Safaricom, not by the front end.
 
 | Done | Method | Path | Front end | What it does |
 |---|---|---|---|---|
-| ☐ | `POST` | `/payments/mpesa/callback` | *new* | Safaricom's result for an STK push |
+| ☐ | `POST` | `/payments/mpesa/callback` | *none* | Safaricom's result for an STK push |

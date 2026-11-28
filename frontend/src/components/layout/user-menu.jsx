@@ -14,8 +14,8 @@ export function UserMenu({ roleLabel }) {
   const navigate = useNavigate()
   const { t } = useTranslation()
 
-  function handleLogOut() {
-    logOut()
+  async function handleLogOut() {
+    await logOut()
     toast.success(t('You are logged out'))
     navigate('/login', { replace: true })
   }

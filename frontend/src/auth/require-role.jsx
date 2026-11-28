@@ -1,15 +1,26 @@
+import { useTranslation } from 'react-i18next'
 import { Navigate, useLocation } from 'react-router'
 import { ROLE_HOME } from '@/config/roles'
 import { useAuth } from './auth-context'
 
 // Shows `children` only to someone logged in with this role.
 // Logged out → log in page (then back here). Wrong role → their own Home.
+// While the app checks the refresh cookie (when it opens), a quiet spinner.
 // This is for a good experience only: the back end must check every request
 // too, because anyone can change code running in their own browser.
 export function RequireRole({ role, children }) {
-  const { user } = useAuth()
+  const { status, user } = useAuth()
   const location = useLocation()
+  const { t } = useTranslation()
 
+  if (status === 'checking') {
+    return (
+      <div role="status" className="grid min-h-screen place-items-center">
+        <span className="size-8 animate-spin rounded-full border-4 border-muted border-t-primary" />
+        <span className="sr-only">{t('Loading')}…</span>
+      </div>
+    )
+  }
   if (!user) {
     return <Navigate to="/login" replace state={{ from: location.pathname }} />
   }

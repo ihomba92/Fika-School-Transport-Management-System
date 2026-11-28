@@ -481,5 +481,10 @@
   "{{trip}} · Live": "{{trip}} · Moja kwa moja",
   "{{trip}} · text only": "{{trip}} · maandishi pekee",
   "{{trip}} · {{bus}} leaves at {{time}}. Check each child onto the bus.": "{{trip}} · {{bus}} linaondoka saa {{time}}. Kagua kila mtoto anapopanda basi.",
-  "{{trip}} · {{marked}} of {{total}} marked": "{{trip}} · {{marked}} kati ya {{total}} wamewekwa alama"
+  "{{trip}} · {{marked}} of {{total}} marked": "{{trip}} · {{marked}} kati ya {{total}} wamewekwa alama",
+  "Your session has ended. Log in again.": "Muda wako wa kuingia umekwisha. Ingia tena.",
+  "Log in to continue.": "Ingia ili uendelee.",
+  "Check your internet connection and try again.": "Angalia muunganisho wako wa intaneti, kisha ujaribu tena.",
+  "M-Pesa didn’t answer in time. Nothing was taken; try again.": "M-Pesa haikujibu kwa wakati. Hakuna pesa iliyokatwa; jaribu tena.",
+  "Something went wrong. Try again.": "Kuna hitilafu. Jaribu tena."
 }
